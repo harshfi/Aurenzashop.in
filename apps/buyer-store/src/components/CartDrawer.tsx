@@ -1,19 +1,16 @@
 "use client";
 
 import { useCartStore } from "@/store/cartStore";
+import { useCartHydrated } from "@/store/useCartHydrated";
+import Image from "next/image";
 import { X, Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, removeItem, updateQuantity, totalPrice } = useCartStore();
-  const [mounted, setMounted] = useState(false);
+  const hydrated = useCartHydrated();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!isOpen || !mounted) return null;
+  if (!isOpen || !hydrated) return null;
 
   return (
     <>
@@ -35,7 +32,7 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
                 <ShoppingBag className="h-12 w-12 text-indigo-200" />
               </div>
               <p className="text-lg font-medium text-gray-900">Your cart is empty</p>
-              <p className="mt-1 text-sm text-gray-500 mb-6">Looks like you haven't added anything yet.</p>
+              <p className="mt-1 text-sm text-gray-500 mb-6">Looks like you haven&apos;t added anything yet.</p>
               <button onClick={onClose} className="px-6 py-2 bg-indigo-600 text-white rounded-full font-medium hover:bg-indigo-700 transition-colors">
                 Start Shopping
               </button>
@@ -45,13 +42,20 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
               {items.map((item) => (
                 <li key={item.id} className="flex gap-4">
                   <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border bg-gray-50">
-                    <img src={item.image || "/placeholder.jpg"} alt={item.name} className="h-full w-full object-cover object-center" />
+                    <Image
+                      src={item.image || "/placeholder-product.svg"}
+                      alt={item.name}
+                      width={96}
+                      height={96}
+                      className="h-full w-full object-cover object-center"
+                    />
                   </div>
                   <div className="flex flex-1 flex-col">
                     <div className="flex justify-between text-base font-medium text-gray-900">
                       <h3 className="line-clamp-2">{item.name}</h3>
                       <p className="ml-4 font-semibold">₹{item.price}</p>
                     </div>
+                    <p className="mt-1 text-xs text-gray-500">{item.variantLabel}</p>
                     <div className="flex flex-1 items-end justify-between text-sm">
                       <div className="flex items-center border rounded-lg bg-white">
                         <button onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} className="p-2 hover:bg-gray-50 hover:text-indigo-600 transition-colors">

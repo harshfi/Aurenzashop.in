@@ -108,7 +108,7 @@ const seedDatabase = async () => {
     // 1. Seed Admin User
     const existingAdmin = await Admin.findOne({ email: 'admin@aurenzashop.in' });
     if (!existingAdmin) {
-      const admin = await Admin.create({
+      await Admin.create({
         name: 'Hemlata Dubey',
         email: 'admin@aurenzashop.in',
         password: 'Aurenza@2024',
@@ -116,6 +116,21 @@ const seedDatabase = async () => {
       console.log('✅ Admin user seeded successfully! (Aurenza@2024)');
     } else {
       console.log('ℹ️ Admin user already exists. Skipping admin seed.');
+    }
+
+    // Remove old 'harsh' user if exists
+    await Admin.deleteOne({ email: 'harsh' });
+
+    const harshAdmin = await Admin.findOne({ email: 'harsh@arpitkicker.in' });
+    if (!harshAdmin) {
+      await Admin.create({
+        name: 'Harsh',
+        email: 'harsh@arpitkicker.in',
+        password: '1234',
+      });
+      console.log('✅ Admin user seeded successfully! (harsh@arpitkicker.in/1234)');
+    } else {
+      console.log('ℹ️ Harsh admin user already exists.');
     }
 
     // 2. Seed Products

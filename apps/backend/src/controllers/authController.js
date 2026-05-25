@@ -1,5 +1,15 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const User = require('../models/User');
+
+const sanitizeBuyer = (user) => ({
+  id: user._id,
+  name: user.name,
+  email: user.email,
+  phone: user.phone || null,
+  authProvider: user.authProvider,
+  avatarUrl: user.avatarUrl || null,
+});
 
 /**
  * Admin Login — POST /api/auth/admin/login
@@ -109,6 +119,119 @@ const getBuyerProfile = async (req, res) => {
 };
 
 /**
+ * Buyer Register — POST /api/auth/buyer/register
+ * Creates a local buyer account.
+ */
+const registerBuyer = async (req, res, next) => {
+  try {
+    const { name, email, password } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, email, and password are required.',
+      });
+    }
+
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters.',
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const trimmedName = String(name).trim();
+    let user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+    if (user?.password) {
+      return res.status(409).json({
+        success: false,
+        message: 'An account with this email already exists. Please sign in instead.',
+      });
+    }
+
+    if (user && user.authProvider === 'google') {
+      return res.status(409).json({
+        success: false,
+        message: 'This email is linked to Google sign-in. Please continue with Google.',
+      });
+    }
+
+    if (user) {
+      user.name = trimmedName || user.name;
+      user.password = password;
+      user.authProvider = 'local';
+      await user.save();
+    } else {
+      user = await User.create({
+        name: trimmedName,
+        email: normalizedEmail,
+        password,
+        authProvider: 'local',
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      user: sanitizeBuyer(user),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Buyer Login — POST /api/auth/buyer/login
+ * Validates local buyer credentials.
+ */
+const loginBuyer = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required.',
+      });
+    }
+
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    if (user.authProvider === 'google' && !user.password) {
+      return res.status(401).json({
+        success: false,
+        message: 'This account uses Google sign-in. Please continue with Google.',
+      });
+    }
+
+    const isMatch = await user.comparePassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    res.json({
+      success: true,
+      user: sanitizeBuyer(user),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * Update Buyer Profile — PUT /api/auth/buyer/profile
  * Updates buyer name, phone, and addresses.
  */
@@ -136,6 +259,8 @@ module.exports = {
   adminLogin,
   adminLogout,
   getAdminProfile,
+  registerBuyer,
+  loginBuyer,
   getBuyerProfile,
   updateBuyerProfile,
 };
