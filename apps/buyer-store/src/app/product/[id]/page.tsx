@@ -2,18 +2,83 @@
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { useCartStore } from "@/store/cartStore";
 import { ArrowLeft, Check, Minus, Plus, ShoppingBag, ShieldCheck, Truck } from "lucide-react";
 import Link from "next/link";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+
 interface Product {
   _id: string;
-  name: string;
+  title: string;
   description: string;
-  price: number;
+  basePrice: number;
   category: string;
-  stock: number;
-  imageUrl: string;
+  images: string[];
+  variants: Array<{
+    sku: string;
+    sizeOrDimension: string;
+    color?: string;
+    additionalPrice: number;
+    stockCount: number;
+  }>;
+}
+
+const FALLBACK_PRODUCTS: Product[] = [
+  {
+    _id: "aurenza-cotton-shirt",
+    title: "Aurenza Cotton Shirt",
+    description: "A crisp everyday shirt made for polished comfort.",
+    basePrice: 1299,
+    category: "clothing",
+    images: ["/placeholder.svg"],
+    variants: [
+      { sku: "CLO-M-001", sizeOrDimension: "M", color: "White", additionalPrice: 0, stockCount: 12 },
+      { sku: "CLO-L-001", sizeOrDimension: "L", color: "White", additionalPrice: 0, stockCount: 8 },
+    ],
+  },
+  {
+    _id: "aurenza-botanical-wallpaper",
+    title: "Botanical Wallpaper",
+    description: "Elegant botanical wallpaper for calm, premium interiors.",
+    basePrice: 2199,
+    category: "wallpaper",
+    images: ["/placeholder.svg"],
+    variants: [
+      { sku: "WAL-8X10-001", sizeOrDimension: "8x10 ft", color: "Sage", additionalPrice: 0, stockCount: 10 },
+    ],
+  },
+];
+
+function normalizeProduct(data: any): Product | null {
+  const product = data?.product || data?.data || data;
+  if (!product) return null;
+
+  if (product.title && typeof product.basePrice === "number") {
+    return product;
+  }
+
+  if (product.name && typeof product.price === "number") {
+    return {
+      _id: product._id,
+      title: product.name,
+      description: product.description || "",
+      basePrice: product.price,
+      category: product.category || "clothing",
+      images: [product.imageUrl || "/placeholder.svg"],
+      variants: [
+        {
+          sku: `${product.category || "item"}-${product._id || "default"}`,
+          sizeOrDimension: "Default",
+          additionalPrice: 0,
+          stockCount: product.stock || 0,
+        },
+      ],
+    };
+  }
+
+  return null;
 }
 
 export default function ProductDetailPage() {
@@ -27,13 +92,14 @@ export default function ProductDetailPage() {
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        const res = await fetch(`http://localhost:5003/api/products/${id}`);
+        const res = await fetch(`${API_BASE}/products/${id}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (data.success) {
-          setProduct(data.data);
+          setProduct(normalizeProduct(data));
         }
-      } catch (error) {
-        console.error("Failed to fetch product:", error);
+      } catch {
+        setProduct(FALLBACK_PRODUCTS.find((item) => item._id === id) || null);
       } finally {
         setLoading(false);
       }
@@ -58,13 +124,19 @@ export default function ProductDetailPage() {
     );
   }
 
+  const totalStock = product.variants?.reduce((sum, variant) => sum + variant.stockCount, 0) || 0;
+
   const handleAddToCart = () => {
+    const firstVariant = product.variants?.[0];
+    const price = product.basePrice + (firstVariant?.additionalPrice || 0);
+
     addItem({
       id: product._id,
-      name: product.name,
-      price: product.price,
+      name: product.title,
+      price,
       quantity,
-      image: product.imageUrl,
+      image: product.images?.[0] || "/placeholder.svg",
+      variantSku: firstVariant?.sku,
     });
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
@@ -78,10 +150,12 @@ export default function ProductDetailPage() {
       
       <div className="grid gap-12 lg:grid-cols-2">
         {/* Product Image */}
-        <div className="aspect-[4/5] overflow-hidden rounded-3xl bg-gray-100 border border-gray-100 sticky top-24">
-          <img
-            src={product.imageUrl || "/placeholder.jpg"}
-            alt={product.name}
+        <div className="relative aspect-[4/5] overflow-hidden rounded-3xl bg-gray-100 border border-gray-100 sticky top-24">
+          <Image
+            src={product.images?.[0] || "/placeholder.svg"}
+            alt={product.title}
+            fill
+            sizes="(min-width: 1024px) 50vw, 100vw"
             className="h-full w-full object-cover object-center"
           />
         </div>
@@ -92,8 +166,8 @@ export default function ProductDetailPage() {
             <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full uppercase tracking-wider mb-4">
               {product.category}
             </span>
-            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl mb-4">{product.name}</h1>
-            <p className="text-3xl font-semibold text-gray-900 mb-6">₹{product.price}</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 sm:text-5xl mb-4">{product.title}</h1>
+            <p className="text-3xl font-semibold text-gray-900 mb-6">₹{product.basePrice.toLocaleString("en-IN")}</p>
           </div>
 
           <div className="prose prose-sm sm:prose-base text-gray-600 mb-8">
@@ -111,22 +185,22 @@ export default function ProductDetailPage() {
                 </button>
                 <span className="w-10 text-center font-semibold text-gray-900">{quantity}</span>
                 <button
-                  onClick={() => setQuantity(Math.min(product.stock, quantity + 1))}
-                  disabled={quantity >= product.stock}
+                  onClick={() => setQuantity(Math.min(totalStock, quantity + 1))}
+                  disabled={quantity >= totalStock}
                   className="w-10 h-10 flex items-center justify-center text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-full disabled:opacity-50 transition-colors"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
               <p className="text-sm text-gray-500">
-                {product.stock > 0 ? `${product.stock} items available` : "Out of stock"}
+                {totalStock > 0 ? `${totalStock} items available` : "Out of stock"}
               </p>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
               <button
                 onClick={handleAddToCart}
-                disabled={product.stock <= 0}
+                disabled={totalStock <= 0}
                 className={`flex-1 flex items-center justify-center gap-2 h-14 rounded-full text-base font-semibold text-white shadow-lg transition-all ${
                   addedToCart 
                     ? "bg-green-500 hover:bg-green-600" 

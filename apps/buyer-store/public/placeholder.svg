@@ -1,0 +1,7 @@
+<svg width="800" height="1000" viewBox="0 0 800 1000" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="1000" fill="#f3f4f6"/>
+  <rect x="96" y="120" width="608" height="760" rx="32" fill="#ffffff" stroke="#e5e7eb" stroke-width="4"/>
+  <path d="M256 610L350 500L430 590L486 530L592 650H208L256 610Z" fill="#c7d2fe"/>
+  <circle cx="524" cy="392" r="52" fill="#e0e7ff"/>
+  <text x="400" y="740" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="54" font-weight="700" fill="#312e81">Aurenza</text>
+</svg>

@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Search, Loader2, Package, Truck, CheckCircle, ChevronDown, ChevronUp, Calendar } from "lucide-react";
 import api from "../lib/api";
+
+const toTitleCase = (value = "") =>
+  value
+    .split("_")
+    .join(" ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 export default function OrderManager() {
   const [orders, setOrders] = useState([]);
@@ -13,7 +19,7 @@ export default function OrderManager() {
   const [updatingId, setUpdatingId] = useState(null);
   const [weightMap, setWeightMap] = useState({}); // weight per order for Delhivery packing
 
-  const loadOrders = async () => {
+  const loadOrders = useCallback(async () => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
@@ -24,16 +30,16 @@ export default function OrderManager() {
       if (res.data?.success) {
         setOrders(res.data.orders || []);
       }
-    } catch (err) {
-      console.error("Failed to load orders:", err);
+    } catch {
+      setOrders([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [paymentFilter, statusFilter]);
 
   useEffect(() => {
     loadOrders();
-  }, [statusFilter, paymentFilter]);
+  }, [loadOrders]);
 
   const toggleExpand = (id) => {
     setExpandedOrderId(expandedOrderId === id ? null : id);
@@ -72,12 +78,11 @@ export default function OrderManager() {
 
   const getStatusBadgeClass = (status) => {
     switch (status) {
-      case "Placed": return "bg-blue-500/10 text-blue-400 border border-blue-500/20";
-      case "Confirmed": return "bg-sky-500/10 text-sky-400 border border-sky-500/20";
-      case "Packed": return "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20";
-      case "Shipped": case "Out for Delivery": return "bg-purple-500/10 text-purple-400 border border-purple-500/20";
-      case "Delivered": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-      case "Cancelled": return "bg-red-500/10 text-red-400 border border-red-500/20";
+      case "placed": return "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+      case "processing": return "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20";
+      case "shipped": return "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+      case "delivered": return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+      case "cancelled": return "bg-red-500/10 text-red-400 border border-red-500/20";
       default: return "bg-white/5 text-text-secondary border border-white/5";
     }
   };
@@ -92,13 +97,11 @@ export default function OrderManager() {
           className="bg-[#16213e]/40 border border-white/5 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:border-[#e94560]/40 text-text-secondary transition-colors"
         >
           <option value="">All Order Statuses</option>
-          <option value="Placed">Placed</option>
-          <option value="Confirmed">Confirmed</option>
-          <option value="Packed">Packed</option>
-          <option value="Shipped">Shipped</option>
-          <option value="Out for Delivery">Out for Delivery</option>
-          <option value="Delivered">Delivered</option>
-          <option value="Cancelled">Cancelled</option>
+          <option value="placed">Placed</option>
+          <option value="processing">Processing</option>
+          <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
         </select>
 
         <select
@@ -107,10 +110,10 @@ export default function OrderManager() {
           className="bg-[#16213e]/40 border border-white/5 text-sm px-4 py-2.5 rounded-xl focus:outline-none focus:border-[#e94560]/40 text-text-secondary transition-colors"
         >
           <option value="">All Payment Statuses</option>
-          <option value="Pending">Pending</option>
-          <option value="Paid">Paid</option>
-          <option value="Failed">Failed</option>
-          <option value="Refunded">Refunded</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="failed">Failed</option>
+          <option value="refunded">Refunded</option>
         </select>
       </div>
 
@@ -155,11 +158,11 @@ export default function OrderManager() {
                       <span className="text-text-secondary">Payment</span>
                       <div className="mt-0.5">
                         <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          order.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                          order.paymentStatus === "Failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                          order.paymentStatus === "paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                          order.paymentStatus === "failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
                           "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
                         }`}>
-                          {order.paymentStatus}
+                          {toTitleCase(order.paymentStatus)}
                         </span>
                       </div>
                     </div>
@@ -168,7 +171,7 @@ export default function OrderManager() {
                       <span className="text-text-secondary">Status</span>
                       <div className="mt-0.5">
                         <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${getStatusBadgeClass(order.orderStatus)}`}>
-                          {order.orderStatus}
+                          {toTitleCase(order.orderStatus)}
                         </span>
                       </div>
                     </div>
@@ -242,7 +245,7 @@ export default function OrderManager() {
                           ) : (
                             <div className="flex flex-col gap-2">
                               {/* Conditionally show Pack & Generate AWB button */}
-                              {order.orderStatus === "Placed" || order.orderStatus === "Confirmed" ? (
+                              {order.orderStatus === "placed" ? (
                                 <div className="space-y-2 p-3 bg-secondary/15 rounded-xl border border-white/5">
                                   <label className="block text-[10px] uppercase font-bold text-text-secondary">Shipment weight (g)</label>
                                   <div className="flex gap-2">
@@ -264,33 +267,25 @@ export default function OrderManager() {
                               ) : null}
 
                               <div className="grid grid-cols-2 gap-2">
-                                {order.orderStatus === "Placed" && (
+                                {order.orderStatus === "processing" && (
                                   <button
-                                    onClick={() => handleStatusUpdate(order._id, "Confirmed")}
-                                    className="bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/20 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
-                                  >
-                                    Confirm Order
-                                  </button>
-                                )}
-                                {order.orderStatus === "Packed" && (
-                                  <button
-                                    onClick={() => handleStatusUpdate(order._id, "Shipped")}
+                                    onClick={() => handleStatusUpdate(order._id, "shipped")}
                                     className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                   >
                                     Ship Order
                                   </button>
                                 )}
-                                {(order.orderStatus === "Shipped" || order.orderStatus === "Out for Delivery") && (
+                                {order.orderStatus === "shipped" && (
                                   <button
-                                    onClick={() => handleStatusUpdate(order._id, "Delivered")}
+                                    onClick={() => handleStatusUpdate(order._id, "delivered")}
                                     className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                   >
                                     Mark Delivered
                                   </button>
                                 )}
-                                {order.orderStatus !== "Delivered" && order.orderStatus !== "Cancelled" && (
+                                {order.orderStatus !== "delivered" && order.orderStatus !== "cancelled" && (
                                   <button
-                                    onClick={() => handleStatusUpdate(order._id, "Cancelled")}
+                                    onClick={() => handleStatusUpdate(order._id, "cancelled")}
                                     className="bg-red-500/5 hover:bg-red-500/15 text-red-400 border border-red-500/10 py-1.5 rounded-lg text-xs font-semibold cursor-pointer"
                                   >
                                     Cancel Order

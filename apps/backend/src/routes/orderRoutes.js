@@ -5,8 +5,8 @@ const adminAuth = require('../middlewares/adminAuth');
 const buyerAuth = require('../middlewares/buyerAuth');
 
 // Buyer routes
-router.post('/', buyerAuth, orderController.createOrder);
-router.post('/verify-payment', buyerAuth, orderController.verifyPayment);
+router.post('/', orderController.createOrder);
+router.post('/verify-payment', orderController.verifyPayment);
 router.get('/my-orders', buyerAuth, orderController.getMyOrders);
 router.get('/detail/:id', buyerAuth, orderController.getOrder);
 

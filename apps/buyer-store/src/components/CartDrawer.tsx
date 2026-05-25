@@ -2,16 +2,19 @@
 
 import { useCartStore } from "@/store/cartStore";
 import { X, Trash2, Plus, Minus, ShoppingBag } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+
+const emptySubscribe = () => () => {};
+
+function useHasMounted() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
 
 export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { items, removeItem, updateQuantity, totalPrice } = useCartStore();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useHasMounted();
 
   if (!isOpen || !mounted) return null;
 
@@ -35,7 +38,7 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
                 <ShoppingBag className="h-12 w-12 text-indigo-200" />
               </div>
               <p className="text-lg font-medium text-gray-900">Your cart is empty</p>
-              <p className="mt-1 text-sm text-gray-500 mb-6">Looks like you haven't added anything yet.</p>
+              <p className="mt-1 text-sm text-gray-500 mb-6">Looks like you haven&apos;t added anything yet.</p>
               <button onClick={onClose} className="px-6 py-2 bg-indigo-600 text-white rounded-full font-medium hover:bg-indigo-700 transition-colors">
                 Start Shopping
               </button>
@@ -44,8 +47,14 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
             <ul className="space-y-6">
               {items.map((item) => (
                 <li key={item.id} className="flex gap-4">
-                  <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border bg-gray-50">
-                    <img src={item.image || "/placeholder.jpg"} alt={item.name} className="h-full w-full object-cover object-center" />
+                  <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-xl border bg-gray-50">
+                    <Image
+                      src={item.image || "/placeholder.svg"}
+                      alt={item.name}
+                      fill
+                      sizes="96px"
+                      className="object-cover object-center"
+                    />
                   </div>
                   <div className="flex flex-1 flex-col">
                     <div className="flex justify-between text-base font-medium text-gray-900">
@@ -77,7 +86,7 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
           <div className="border-t border-gray-100 bg-gray-50 px-6 py-6">
             <div className="flex justify-between text-base font-medium text-gray-900 mb-4">
               <p>Subtotal</p>
-              <p className="text-xl">₹{totalPrice().toLocaleString()}</p>
+              <p className="text-xl">₹{totalPrice.toLocaleString("en-IN")}</p>
             </div>
             <p className="mt-0.5 text-sm text-gray-500 mb-6">Shipping and taxes calculated at checkout.</p>
             <Link href="/checkout" onClick={onClose} className="flex w-full items-center justify-center rounded-full bg-indigo-600 px-6 py-4 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors group">

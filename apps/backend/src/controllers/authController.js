@@ -109,6 +109,18 @@ const getBuyerProfile = async (req, res) => {
 };
 
 /**
+ * Verify Buyer Google Session — GET /api/auth/buyer/google
+ * NextAuth handles OAuth in buyer app; backend uses buyerAuth middleware.
+ */
+const verifyBuyerGoogleSession = async (req, res) => {
+  res.json({
+    success: true,
+    message: 'Buyer session verified.',
+    user: req.user,
+  });
+};
+
+/**
  * Update Buyer Profile — PUT /api/auth/buyer/profile
  * Updates buyer name, phone, and addresses.
  */
@@ -137,5 +149,6 @@ module.exports = {
   adminLogout,
   getAdminProfile,
   getBuyerProfile,
+  verifyBuyerGoogleSession,
   updateBuyerProfile,
 };

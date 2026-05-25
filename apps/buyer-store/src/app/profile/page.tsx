@@ -1,6 +1,8 @@
 "use client";
 
-import { useSession, signOut } from "next-auth/react";
+import Link from "next/link";
+import Image from "next/image";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { User, Package, Settings, LogOut } from "lucide-react";
 
 export default function ProfilePage() {
@@ -22,9 +24,13 @@ export default function ProfilePage() {
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Not signed in</h2>
         <p className="text-gray-500 mb-8">Sign in to view your profile and orders.</p>
-        <a href="/api/auth/signin" className="inline-flex items-center justify-center px-8 py-3 bg-indigo-600 text-white rounded-full font-medium hover:bg-indigo-700 transition-colors">
+        <button
+          type="button"
+          onClick={() => signIn()}
+          className="inline-flex items-center justify-center px-8 py-3 bg-indigo-600 text-white rounded-full font-medium hover:bg-indigo-700 transition-colors"
+        >
           Sign In
-        </a>
+        </button>
       </div>
     );
   }
@@ -34,9 +40,11 @@ export default function ProfilePage() {
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         {/* Header Profile */}
         <div className="p-8 sm:p-12 bg-indigo-50 border-b border-indigo-100 flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
-          <img
-            src={session.user?.image || "/placeholder.jpg"}
+          <Image
+            src={session.user?.image || "/placeholder.svg"}
             alt="Profile"
+            width={96}
+            height={96}
             className="w-24 h-24 rounded-full border-4 border-white shadow-sm"
           />
           <div>
@@ -57,8 +65,8 @@ export default function ProfilePage() {
           </h2>
 
           <div className="bg-gray-50 rounded-2xl p-8 text-center border border-dashed border-gray-200">
-            <p className="text-gray-500 mb-4">You haven't placed any orders yet.</p>
-            <a href="/shop" className="text-indigo-600 font-medium hover:underline">Start shopping</a>
+            <p className="text-gray-500 mb-4">You haven&apos;t placed any orders yet.</p>
+            <Link href="/shop" className="text-indigo-600 font-medium hover:underline">Start shopping</Link>
           </div>
         </div>
       </div>

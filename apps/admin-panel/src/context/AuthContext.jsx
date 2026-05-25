@@ -35,6 +35,12 @@ export function AuthProvider({ children }) {
       }
       return { success: false, message: "Invalid response from server" };
     } catch (err) {
+      if (err.code === "ERR_NETWORK") {
+        return {
+          success: false,
+          message: "Backend is unreachable. Start API server on http://localhost:8080.",
+        };
+      }
       return {
         success: false,
         message: err.response?.data?.message || "Login failed. Check your network or credentials.",
@@ -45,8 +51,8 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       await api.post("/auth/admin/logout");
-    } catch (err) {
-      console.error("Logout request failed:", err);
+    } catch {
+      // The local admin session is cleared even if the API is unavailable.
     } finally {
       setAdmin(null);
     }

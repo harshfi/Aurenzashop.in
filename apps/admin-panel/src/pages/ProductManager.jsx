@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, Plus, Edit2, Trash2, Loader2, Sparkles } from "lucide-react";
 import api from "../lib/api";
@@ -9,7 +9,7 @@ export default function ProductManager() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
 
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
@@ -20,12 +20,12 @@ export default function ProductManager() {
       if (res.data?.success) {
         setProducts(res.data.products || []);
       }
-    } catch (err) {
-      console.error("Failed to load products:", err);
+    } catch {
+      setProducts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, search]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -33,7 +33,7 @@ export default function ProductManager() {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [search, category]);
+  }, [loadProducts]);
 
   const handleDelete = async (id, title) => {
     if (!confirm(`Are you sure you want to delete product "${title}"?`)) return;

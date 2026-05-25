@@ -4,7 +4,7 @@ const User = require('../models/User');
 const razorpayService = require('../services/razorpayService');
 const delhiveryService = require('../services/delhiveryService');
 const emailService = require('../services/emailService');
-const { ORDER_STATUSES, PAYMENT_STATUSES, PAYMENT_METHODS } = require('@aurenza/shared');
+const { ORDER_STATUSES, PAYMENT_STATUSES, PAYMENT_METHOD_LIST } = require('@aurenza/shared');
 
 /**
  * Create Order — POST /api/orders
@@ -12,7 +12,7 @@ const { ORDER_STATUSES, PAYMENT_STATUSES, PAYMENT_METHODS } = require('@aurenza/
  */
 const createOrder = async (req, res, next) => {
   try {
-    const { items, shippingAddress, paymentMethod } = req.body;
+    const { items, shippingAddress, paymentMethod, customer } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ success: false, message: 'Order must have at least one item.' });
@@ -22,8 +22,31 @@ const createOrder = async (req, res, next) => {
       return res.status(400).json({ success: false, message: 'Shipping address is required.' });
     }
 
-    if (!paymentMethod || !Object.values(PAYMENT_METHODS).includes(paymentMethod)) {
+    if (!paymentMethod || !PAYMENT_METHOD_LIST.includes(paymentMethod)) {
       return res.status(400).json({ success: false, message: 'Valid payment method is required.' });
+    }
+
+    const buyerEmail = req.user?.email || customer?.email;
+    if (!buyerEmail) {
+      return res.status(400).json({ success: false, message: 'Buyer email is required.' });
+    }
+
+    let buyer = req.user;
+    if (!buyer) {
+      buyer = await User.findOne({ email: buyerEmail });
+      if (!buyer) {
+        buyer = await User.create({
+          name: customer?.name || 'Aurenza Buyer',
+          email: buyerEmail,
+          phone: customer?.phone || shippingAddress?.phone || null,
+          authProvider: 'google',
+          providerId: customer?.providerId || null,
+          avatarUrl: null,
+        });
+      } else if ((customer?.phone || shippingAddress?.phone) && !buyer.phone) {
+        buyer.phone = customer?.phone || shippingAddress?.phone;
+        await buyer.save();
+      }
     }
 
     // Validate stock and calculate total
@@ -36,7 +59,15 @@ const createOrder = async (req, res, next) => {
         return res.status(404).json({ success: false, message: `Product not found: ${item.productId}` });
       }
 
-      const variant = product.variants.find((v) => v.sku === item.variantSku);
+      let variant = product.variants.find((v) => v.sku === item.variantSku);
+      if (!variant && typeof item.variantSku === 'string' && item.variantSku.startsWith('variant-')) {
+        const variantId = item.variantSku.slice('variant-'.length);
+        variant = product.variants.find((v) => String(v._id) === variantId);
+      }
+      if (!variant && product.variants.length > 0) {
+        // Recover gracefully when older cart state has no/invalid variant SKU.
+        variant = product.variants[0];
+      }
       if (!variant) {
         return res.status(400).json({ success: false, message: `Variant not found: ${item.variantSku}` });
       }
@@ -53,12 +84,12 @@ const createOrder = async (req, res, next) => {
 
       orderItems.push({
         product: product._id,
-        variantSku: variant.sku,
+        variantSku: variant.sku || `variant-${variant._id}`,
         quantity: item.quantity,
         priceAtPurchase: unitPrice,
         productTitle: product.title,
         productImage: product.images[0] || '',
-        variantLabel: `${variant.sizeOrDimension}${variant.color ? ' / ' + variant.color : ''}`,
+        variantLabel: `${variant.sizeOrDimension || 'Default'}${variant.color ? ' / ' + variant.color : ''}`,
       });
 
       // Decrement stock
@@ -68,11 +99,11 @@ const createOrder = async (req, res, next) => {
 
     // Create order
     const order = await Order.create({
-      user: req.user._id,
+      user: buyer._id,
       items: orderItems,
       totalAmount,
       paymentMethod,
-      paymentStatus: paymentMethod === PAYMENT_METHODS.COD ? PAYMENT_STATUSES.PENDING : PAYMENT_STATUSES.PENDING,
+      paymentStatus: PAYMENT_STATUSES.PENDING,
       orderStatus: ORDER_STATUSES.PLACED,
       shippingAddress,
       trackingHistory: [
@@ -83,7 +114,7 @@ const createOrder = async (req, res, next) => {
     let razorpayOrder = null;
 
     // Create Razorpay order if prepaid
-    if (paymentMethod === PAYMENT_METHODS.PREPAID) {
+    if (paymentMethod === 'razorpay') {
       razorpayOrder = await razorpayService.createOrder(
         totalAmount,
         `order_${order._id}`
@@ -93,7 +124,7 @@ const createOrder = async (req, res, next) => {
     }
 
     // Send confirmation email (async, don't block response)
-    emailService.sendOrderConfirmation(order, req.user).catch((err) =>
+    emailService.sendOrderConfirmation(order, buyer).catch((err) =>
       console.error('Order confirmation email failed:', err)
     );
 
@@ -140,7 +171,7 @@ const verifyPayment = async (req, res, next) => {
 
     order.paymentStatus = PAYMENT_STATUSES.PAID;
     order.razorpayPaymentId = razorpay_payment_id;
-    order.orderStatus = ORDER_STATUSES.CONFIRMED;
+    order.orderStatus = ORDER_STATUSES.PROCESSING;
     order.trackingHistory.push({
       status: 'Payment Confirmed',
       location: 'Online',
@@ -252,7 +283,7 @@ const getOrder = async (req, res, next) => {
 
 /**
  * Pack Order — PUT /api/orders/admin/:id/pack
- * Admin only. Calls Delhivery for AWB generation. Updates status to Packed.
+ * Admin only. Calls Delhivery for AWB generation.
  */
 const packOrder = async (req, res, next) => {
   try {
@@ -262,8 +293,9 @@ const packOrder = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Order not found.' });
     }
 
-    if (order.orderStatus === ORDER_STATUSES.PACKED || order.delhiveryAWB) {
-      return res.status(400).json({ success: false, message: 'Order is already packed.' });
+    const immutableStatuses = [ORDER_STATUSES.SHIPPED, ORDER_STATUSES.DELIVERED, ORDER_STATUSES.CANCELLED];
+    if (immutableStatuses.includes(order.orderStatus) || order.delhiveryAWB) {
+      return res.status(400).json({ success: false, message: 'Order cannot be packed in current state.' });
     }
 
     // Call Delhivery to create shipment and get AWB
@@ -288,7 +320,7 @@ const packOrder = async (req, res, next) => {
 
     // Update order
     order.delhiveryAWB = shipmentResult.awb;
-    order.orderStatus = ORDER_STATUSES.PACKED;
+    order.orderStatus = ORDER_STATUSES.PROCESSING;
     order.trackingHistory.push({
       status: 'Order Packed',
       location: 'Aurenza Warehouse',
@@ -319,6 +351,12 @@ const packOrder = async (req, res, next) => {
 const updateOrderStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
+    const allowedStatuses = Object.values(ORDER_STATUSES);
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid order status.' });
+    }
+
     const order = await Order.findById(req.params.id);
 
     if (!order) {
@@ -369,7 +407,7 @@ const razorpayWebhook = async (req, res, next) => {
         if (order && order.paymentStatus !== PAYMENT_STATUSES.PAID) {
           order.paymentStatus = PAYMENT_STATUSES.PAID;
           order.razorpayPaymentId = payload.payment?.entity?.id;
-          order.orderStatus = ORDER_STATUSES.CONFIRMED;
+          order.orderStatus = ORDER_STATUSES.PROCESSING;
           order.trackingHistory.push({
             status: 'Payment Confirmed',
             location: 'Online',
@@ -432,7 +470,7 @@ const delhiveryWebhook = async (req, res, next) => {
     if (statusLower.includes('in transit') || statusLower.includes('dispatched')) {
       order.orderStatus = ORDER_STATUSES.SHIPPED;
     } else if (statusLower.includes('out for delivery')) {
-      order.orderStatus = ORDER_STATUSES.OUT_FOR_DELIVERY;
+      order.orderStatus = ORDER_STATUSES.SHIPPED;
     } else if (statusLower.includes('delivered')) {
       order.orderStatus = ORDER_STATUSES.DELIVERED;
     }
@@ -466,7 +504,7 @@ const getDashboardStats = async (req, res, next) => {
       recentOrders,
     ] = await Promise.all([
       Order.countDocuments(),
-      Order.countDocuments({ orderStatus: { $in: [ORDER_STATUSES.PLACED, ORDER_STATUSES.CONFIRMED] } }),
+      Order.countDocuments({ orderStatus: { $in: [ORDER_STATUSES.PLACED, ORDER_STATUSES.PROCESSING] } }),
       Order.aggregate([
         { $match: { paymentStatus: PAYMENT_STATUSES.PAID } },
         { $group: { _id: null, total: { $sum: '$totalAmount' } } },

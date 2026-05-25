@@ -1,7 +1,6 @@
 export const CATEGORY_LIST = [
   "clothing",
-  "wallpaper",
-  "accessories"
+  "wallpaper"
 ];
 
 export const ORDER_STATUSES = {

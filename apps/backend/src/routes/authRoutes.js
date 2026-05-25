@@ -10,6 +10,7 @@ router.post('/admin/logout', authController.adminLogout);
 router.get('/admin/me', adminAuth, authController.getAdminProfile);
 
 // Buyer auth routes
+router.get('/buyer/google', buyerAuth, authController.verifyBuyerGoogleSession);
 router.get('/buyer/me', buyerAuth, authController.getBuyerProfile);
 router.put('/buyer/profile', buyerAuth, authController.updateBuyerProfile);
 

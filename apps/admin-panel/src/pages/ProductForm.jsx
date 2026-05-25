@@ -38,8 +38,7 @@ export default function ProductForm() {
           setVariants(product.variants || []);
           setExistingImages(product.images || []);
         }
-      } catch (err) {
-        console.error("Failed to load product details:", err);
+      } catch {
         alert("Failed to load product details.");
         navigate("/products");
       } finally {
@@ -47,7 +46,7 @@ export default function ProductForm() {
       }
     }
     loadProduct();
-  }, [id, isEdit]);
+  }, [id, isEdit, navigate]);
 
   // Variant Controls
   const addVariantRow = () => {

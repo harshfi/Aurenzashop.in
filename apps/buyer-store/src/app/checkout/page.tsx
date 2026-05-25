@@ -1,21 +1,58 @@
 "use client";
 
 import { useCartStore } from "@/store/cartStore";
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, CreditCard, Lock, CheckCircle2 } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import Image from "next/image";
+import { ArrowLeft, Lock, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
+import { useSession, signIn } from "next-auth/react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080/api";
+
+const emptySubscribe = () => () => {};
+
+function useHasMounted() {
+  return useSyncExternalStore(emptySubscribe, () => true, () => false);
+}
+
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+async function loadRazorpayScript() {
+  if (typeof window === "undefined") return false;
+  if (window.Razorpay) return true;
+
+  return new Promise<boolean>((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCartStore();
-  const router = useRouter();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [error, setError] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod">("razorpay");
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    email: session?.user?.email || "",
+    phone: "",
+    address: "",
+    city: "",
+    state: "",
+    postalCode: "",
+  });
+  const mounted = useHasMounted();
 
   if (!mounted) return null;
 
@@ -45,15 +82,117 @@ export default function CheckoutPage() {
     );
   }
 
+  const onInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { id, value } = e.target;
+    setFormData((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const buildOrderPayload = () => {
+    const itemPayload = items.map((item) => ({
+      productId: item.id,
+      variantSku: item.variantSku || null,
+      quantity: item.quantity,
+    }));
+
+    return {
+      items: itemPayload,
+      paymentMethod,
+      customer: {
+        name: `${formData.firstName} ${formData.lastName}`.trim(),
+        email: formData.email,
+        phone: formData.phone,
+        providerId: null,
+      },
+      shippingAddress: {
+        street: formData.address,
+        city: formData.city,
+        state: formData.state,
+        pinCode: formData.postalCode,
+        phone: formData.phone,
+      },
+    };
+  };
+
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     setLoading(true);
-    // Simulate API call and payment
-    setTimeout(() => {
+
+    try {
+      const createOrderRes = await fetch(`${API_BASE}/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(buildOrderPayload()),
+      });
+
+      const createOrderData = await createOrderRes.json();
+      if (!createOrderRes.ok || !createOrderData.success) {
+        throw new Error(createOrderData.message || "Failed to create order.");
+      }
+
+      if (paymentMethod === "cod") {
+        setSuccess(true);
+        clearCart();
+        return;
+      }
+
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded || !window.Razorpay) {
+        throw new Error("Failed to load Razorpay Checkout.");
+      }
+
+      const razorpay = createOrderData.razorpay;
+      if (!razorpay?.orderId || !razorpay?.keyId) {
+        throw new Error("Razorpay order details are missing.");
+      }
+
+      const options = {
+        key: razorpay.keyId,
+        amount: razorpay.amount,
+        currency: razorpay.currency || "INR",
+        name: "Aurenza",
+        description: "Clothing & Wallpaper Purchase",
+        order_id: razorpay.orderId,
+        prefill: {
+          name: `${formData.firstName} ${formData.lastName}`.trim(),
+          email: formData.email,
+          contact: formData.phone,
+        },
+        theme: { color: "#4f46e5" },
+        handler: async (response: {
+          razorpay_order_id: string;
+          razorpay_payment_id: string;
+          razorpay_signature: string;
+        }) => {
+          try {
+            const verifyRes = await fetch(`${API_BASE}/orders/verify-payment`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify(response),
+            });
+
+            const verifyData = await verifyRes.json();
+            if (!verifyRes.ok || !verifyData.success) {
+              throw new Error(verifyData.message || "Payment verification failed.");
+            }
+
+            setSuccess(true);
+            clearCart();
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Payment verification failed.");
+          }
+        },
+      };
+
+      const checkout = new window.Razorpay(options);
+      checkout.open();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Checkout failed. Please try again.");
+    } finally {
       setLoading(false);
-      setSuccess(true);
-      clearCart();
-    }, 2000);
+    }
   };
 
   return (
@@ -69,17 +208,22 @@ export default function CheckoutPage() {
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
             
             <form onSubmit={handleCheckout} className="space-y-8 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+              {error && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+                  {error}
+                </div>
+              )}
               {/* Contact Info */}
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Contact Information</h2>
                 <div className="space-y-4">
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email address</label>
-                    <input type="email" id="email" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="email" id="email" required value={formData.email} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                   <div>
                     <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone number</label>
-                    <input type="tel" id="phone" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="tel" id="phone" required value={formData.phone} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                 </div>
               </div>
@@ -90,24 +234,56 @@ export default function CheckoutPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                    <input type="text" id="firstName" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="text" id="firstName" required value={formData.firstName} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                   <div>
                     <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                    <input type="text" id="lastName" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="text" id="lastName" required value={formData.lastName} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                   <div className="md:col-span-2">
                     <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-                    <input type="text" id="address" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="text" id="address" required value={formData.address} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                   <div>
                     <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                    <input type="text" id="city" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="text" id="city" required value={formData.city} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                  </div>
+                  <div>
+                    <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">State</label>
+                    <input type="text" id="state" required value={formData.state} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
                   <div>
                     <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-1">Postal code</label>
-                    <input type="text" id="postalCode" required className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
+                    <input type="text" id="postalCode" required value={formData.postalCode} onChange={onInputChange} className="w-full rounded-xl border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 h-12 px-4 border" />
                   </div>
+                </div>
+              </div>
+
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment Method</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("razorpay")}
+                    className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                      paymentMethod === "razorpay"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Pay Online (Razorpay)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("cod")}
+                    className={`rounded-xl border px-4 py-3 text-left text-sm font-medium transition-colors ${
+                      paymentMethod === "cod"
+                        ? "border-indigo-500 bg-indigo-50 text-indigo-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    Cash on Delivery
+                  </button>
                 </div>
               </div>
 
@@ -119,9 +295,17 @@ export default function CheckoutPage() {
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <><Lock className="w-5 h-5 opacity-70" /> Pay ₹{totalPrice().toLocaleString()}</>
+                  <><Lock className="w-5 h-5 opacity-70" /> {paymentMethod === "razorpay" ? "Pay" : "Place COD Order"} ₹{totalPrice.toLocaleString("en-IN")}</>
                 )}
               </button>
+              {!session && (
+                <p className="text-sm text-gray-500">
+                  Signed-out checkout is enabled. For order tracking in profile,{" "}
+                  <button type="button" onClick={() => signIn("google")} className="font-semibold text-indigo-600 hover:underline">
+                    sign in with Google
+                  </button>.
+                </p>
+              )}
             </form>
           </div>
 
@@ -133,8 +317,14 @@ export default function CheckoutPage() {
               <ul className="space-y-4 mb-6 border-b pb-6">
                 {items.map((item) => (
                   <li key={item.id} className="flex gap-4">
-                    <div className="h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden border bg-gray-50">
-                      <img src={item.image || "/placeholder.jpg"} alt={item.name} className="h-full w-full object-cover" />
+                    <div className="relative h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden border bg-gray-50">
+                      <Image
+                        src={item.image || "/placeholder.svg"}
+                        alt={item.name}
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
                     </div>
                     <div className="flex-1">
                       <h4 className="text-sm font-medium text-gray-900 line-clamp-2">{item.name}</h4>
@@ -148,7 +338,7 @@ export default function CheckoutPage() {
               <div className="space-y-3 text-sm text-gray-600 mb-6">
                 <div className="flex justify-between">
                   <p>Subtotal</p>
-                  <p className="font-medium text-gray-900">₹{totalPrice().toLocaleString()}</p>
+                  <p className="font-medium text-gray-900">₹{totalPrice.toLocaleString("en-IN")}</p>
                 </div>
                 <div className="flex justify-between">
                   <p>Shipping</p>
@@ -158,7 +348,7 @@ export default function CheckoutPage() {
 
               <div className="flex justify-between items-center border-t pt-6">
                 <p className="text-base font-medium text-gray-900">Total</p>
-                <p className="text-2xl font-bold text-gray-900">₹{totalPrice().toLocaleString()}</p>
+                <p className="text-2xl font-bold text-gray-900">₹{totalPrice.toLocaleString("en-IN")}</p>
               </div>
             </div>
           </div>

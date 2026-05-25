@@ -62,7 +62,7 @@ const dummyProducts = [
     basePrice: 3499,
     category: "wallpaper",
     images: [
-      "https://images.unsplash.com/photo-1531685222403-f928502d2b30?auto=format&fit=crop&w=600&q=80"
+      "https://images.unsplash.com/photo-1616628182509-c6cd7f8bdad8?auto=format&fit=crop&w=600&q=80"
     ],
     variants: [
       { sku: "WPP-FLO-10X10", sizeOrDimension: "10 x 10 ft", color: "Multi", additionalPrice: 0, stockCount: 20 },

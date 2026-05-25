@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { DollarSign, ClipboardList, Clock, Layers, Loader2, ArrowRight } from "lucide-react";
 import api from "../lib/api";
 
+const toTitleCase = (value = "") =>
+  value
+    .split("_")
+    .join(" ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -16,8 +23,9 @@ export default function Dashboard() {
           setStats(res.data.stats);
           setRecentOrders(res.data.recentOrders || []);
         }
-      } catch (err) {
-        console.error("Failed to load dashboard stats:", err);
+      } catch {
+        setStats(null);
+        setRecentOrders([]);
       } finally {
         setLoading(false);
       }
@@ -117,20 +125,20 @@ export default function Dashboard() {
                     <td className="py-4 px-4 font-bold text-accent">₹{order.totalAmount.toLocaleString("en-IN")}</td>
                     <td className="py-4 px-4">
                       <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                        order.paymentStatus === "Paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                        order.paymentStatus === "Failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                        order.paymentStatus === "paid" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                        order.paymentStatus === "failed" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
                         "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
                       }`}>
-                        {order.paymentStatus}
+                        {toTitleCase(order.paymentStatus)}
                       </span>
                     </td>
                     <td className="py-4 px-4">
                       <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                        order.orderStatus === "Delivered" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
-                        order.orderStatus === "Cancelled" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                        order.orderStatus === "delivered" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                        order.orderStatus === "cancelled" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
                         "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20"
                       }`}>
-                        {order.orderStatus}
+                        {toTitleCase(order.orderStatus)}
                       </span>
                     </td>
                     <td className="py-4 px-4 text-right">

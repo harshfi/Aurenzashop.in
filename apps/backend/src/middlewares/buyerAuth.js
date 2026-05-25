@@ -11,21 +11,18 @@ const User = require('../models/User');
  */
 const buyerAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required. Please sign in.',
-      });
-    }
-
-    const token = authHeader.split(' ')[1];
+    const authHeader = req.headers.authorization || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const cookieToken =
+      req.cookies?.['next-auth.session-token'] ||
+      req.cookies?.['__Secure-next-auth.session-token'] ||
+      null;
+    const token = bearerToken || cookieToken;
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid authentication token.',
+        message: 'Authentication required. Please sign in.',
       });
     }
 
@@ -33,8 +30,9 @@ const buyerAuth = async (req, res, next) => {
     // NextAuth v5 uses the AUTH_SECRET / NEXTAUTH_SECRET to sign tokens
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET);
-    } catch (err) {
+      const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+      decoded = jwt.verify(token, authSecret);
+    } catch (_err) {
       return res.status(401).json({
         success: false,
         message: 'Invalid or expired token.',
@@ -64,8 +62,7 @@ const buyerAuth = async (req, res, next) => {
 
     req.user = user;
     next();
-  } catch (error) {
-    console.error('Buyer auth error:', error);
+  } catch (_error) {
     return res.status(500).json({
       success: false,
       message: 'Authentication failed.',
