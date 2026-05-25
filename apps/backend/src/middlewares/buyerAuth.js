@@ -29,11 +29,20 @@ const buyerAuth = async (req, res, next) => {
       });
     }
 
-    // Decode the NextAuth JWT
-    // NextAuth v5 uses the AUTH_SECRET / NEXTAUTH_SECRET to sign tokens
+    // Decode the NextAuth JWT (buyer-store signs with AUTH_SECRET or NEXTAUTH_SECRET)
+    const sessionSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+
+    if (!sessionSecret) {
+      console.error('Buyer auth error: AUTH_SECRET / NEXTAUTH_SECRET is not configured.');
+      return res.status(500).json({
+        success: false,
+        message: 'Authentication is not configured on the server.',
+      });
+    }
+
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET);
+      decoded = jwt.verify(token, sessionSecret);
     } catch (err) {
       return res.status(401).json({
         success: false,
@@ -48,18 +57,47 @@ const buyerAuth = async (req, res, next) => {
       });
     }
 
+    const authProvider = decoded.authProvider === 'google' ? 'google' : 'local';
+    const providerId = authProvider === 'google' ? decoded.sub || null : null;
+
     // Find or create the user in our database
     let user = await User.findOne({ email: decoded.email });
 
     if (!user) {
       // Auto-create user from OAuth data
       user = await User.create({
-        name: decoded.name || 'User',
+        name: decoded.name || decoded.email?.split('@')[0] || 'User',
         email: decoded.email,
-        authProvider: 'google',
-        providerId: decoded.sub || null,
+        authProvider,
+        providerId,
         avatarUrl: decoded.picture || null,
       });
+    } else {
+      let didChange = false;
+
+      if (decoded.name && decoded.name !== user.name) {
+        user.name = decoded.name;
+        didChange = true;
+      }
+
+      if (decoded.picture && decoded.picture !== user.avatarUrl) {
+        user.avatarUrl = decoded.picture;
+        didChange = true;
+      }
+
+      if (authProvider !== user.authProvider) {
+        user.authProvider = authProvider;
+        didChange = true;
+      }
+
+      if (providerId !== user.providerId) {
+        user.providerId = providerId;
+        didChange = true;
+      }
+
+      if (didChange) {
+        await user.save();
+      }
     }
 
     req.user = user;

@@ -1,137 +1,323 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import Image from "next/image";
 import Link from "next/link";
-import { Filter, ShoppingBag, Paintbrush } from "lucide-react";
+import { Suspense, startTransition, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Filter, Paintbrush, ShoppingBag, Sparkles } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
+import { buildApiUrl } from "@/lib/api";
+import {
+  formatCategoryLabel,
+  getPreferredVariant,
+  normalizeProductListResponse,
+  PRODUCT_CATEGORIES,
+  type BuyerProduct,
+} from "@/lib/products";
 
-interface Product {
-  _id: string;
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  stock: number;
-  imageUrl: string;
+function ProductImage({ product }: { product: BuyerProduct }) {
+  if (!product.imageUrl) {
+    return (
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#f6e7c8,#ead9b7_52%,#d2c0a1)]" />
+    );
+  }
+
+  return (
+    <Image
+      src={product.imageUrl}
+      alt={product.title}
+      fill
+      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+      className="object-cover object-center transition-transform duration-700 group-hover:scale-105"
+    />
+  );
 }
 
 function ShopContent() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category");
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<BuyerProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const { addItem } = useCartStore();
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const addItem = useCartStore((state) => state.addItem);
+
+  const activeCategory = useMemo(
+    () =>
+      PRODUCT_CATEGORIES.find((category) => category.value === categoryParam) ??
+      PRODUCT_CATEGORIES[0],
+    [categoryParam]
+  );
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const controller = new AbortController();
+
+    async function fetchProducts() {
       try {
         setLoading(true);
-        const url = new URL("http://localhost:5003/api/products");
+        setErrorMessage(null);
+
+        const url = new URL(buildApiUrl("/api/products"));
         if (categoryParam) {
-          url.searchParams.append("category", categoryParam);
+          url.searchParams.set("category", categoryParam);
         }
-        const res = await fetch(url.toString());
-        const data = await res.json();
-        if (data.success) {
-          setProducts(data.data);
+
+        const response = await fetch(url.toString(), {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+
+        if (!response.ok) {
+          throw new Error(`Request failed with status ${response.status}`);
         }
+
+        const payload = await response.json();
+        const normalizedProducts = normalizeProductListResponse(payload);
+
+        startTransition(() => {
+          setProducts(normalizedProducts);
+        });
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
         console.error("Failed to fetch products:", error);
+        setProducts([]);
+        setErrorMessage("We couldn't load the collection right now. Please try again in a moment.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
-    };
+    }
 
     fetchProducts();
+
+    return () => controller.abort();
   }, [categoryParam]);
 
+  const productCountLabel = `${products.length} ${products.length === 1 ? "piece" : "pieces"}`;
+
   return (
-    <div className="container mx-auto px-4 py-12">
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Sidebar Filters */}
-        <aside className="w-full md:w-64 space-y-6 flex-shrink-0">
-          <div>
-            <h3 className="font-semibold mb-4 flex items-center gap-2 text-gray-900 border-b pb-2">
-              <Filter className="w-4 h-4" /> Categories
-            </h3>
-            <ul className="space-y-3 text-sm text-gray-600">
-              <li>
-                <Link href="/shop" className={`hover:text-indigo-600 transition-colors ${!categoryParam ? 'text-indigo-600 font-medium' : ''}`}>
-                  All Products
+    <div className="bg-[linear-gradient(180deg,#fffcf7_0%,#fff8ee_22%,#ffffff_52%)]">
+      <section className="border-b border-stone-200/70">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:py-16">
+          <div className="space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-amber-800 shadow-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              Curated collection
+            </div>
+            <div className="space-y-4">
+              <p className="text-sm uppercase tracking-[0.32em] text-stone-500">Aurenza shop</p>
+              <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.04em] text-stone-900 sm:text-5xl">
+                {activeCategory.label === "All products"
+                  ? "Designed pieces for dressing beautifully and living deliberately."
+                  : `${activeCategory.label} selected for a sharper, more considered home and wardrobe.`}
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-stone-600 sm:text-lg">
+                {activeCategory.blurb}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {PRODUCT_CATEGORIES.map((category) => {
+                const isActive = activeCategory.value === category.value;
+
+                return (
+                  <Link
+                    key={category.value}
+                    href={category.href}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${
+                      isActive
+                        ? "bg-stone-900 text-white shadow-lg shadow-stone-200"
+                        : "bg-white text-stone-600 ring-1 ring-stone-200 hover:text-amber-700"
+                    }`}
+                  >
+                    {category.label}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="relative overflow-hidden rounded-[2rem] border border-stone-200/80 bg-[linear-gradient(145deg,#2f241f,#6c4f3d_45%,#d6a86a_120%)] p-8 text-white shadow-[0_25px_80px_rgba(120,74,27,0.18)]">
+            <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+            <div className="relative flex h-full flex-col justify-between gap-8">
+              <div className="space-y-4">
+                <p className="text-sm uppercase tracking-[0.3em] text-white/70">Now browsing</p>
+                <h2 className="text-3xl font-semibold tracking-[-0.04em]">
+                  {categoryParam ? formatCategoryLabel(categoryParam) : "All products"}
+                </h2>
+                <p className="max-w-sm text-sm leading-6 text-white/75">
+                  Elevated essentials, rich materials, and styling details that hold up in real life.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.28em] text-white/65">Available</p>
+                  <p className="mt-2 text-3xl font-semibold">{productCountLabel}</p>
+                </div>
+                <div className="rounded-3xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+                  <p className="text-xs uppercase tracking-[0.28em] text-white/65">Fast add</p>
+                  <p className="mt-2 text-3xl font-semibold">1 tap</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[280px_minmax(0,1fr)] lg:py-14">
+        <aside className="h-fit rounded-[2rem] border border-stone-200/80 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-2 border-b border-stone-200 pb-4 text-stone-900">
+            <Filter className="h-4 w-4" />
+            <h3 className="font-semibold">Browse by category</h3>
+          </div>
+          <div className="space-y-3">
+            {PRODUCT_CATEGORIES.map((category) => {
+              const isActive = activeCategory.value === category.value;
+              const Icon = category.value === "wallpaper" ? Paintbrush : ShoppingBag;
+
+              return (
+                <Link
+                  key={category.value}
+                  href={category.href}
+                  className={`flex items-start justify-between rounded-2xl px-4 py-4 transition-all ${
+                    isActive ? "bg-amber-50 text-stone-900 ring-1 ring-amber-200" : "hover:bg-stone-50"
+                  }`}
+                >
+                  <div>
+                    <p className="font-medium">{category.label}</p>
+                    <p className="mt-1 text-sm text-stone-500">{category.blurb}</p>
+                  </div>
+                  <Icon className={`mt-1 h-4 w-4 ${isActive ? "text-amber-700" : "text-stone-400"}`} />
                 </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=Clothing" className={`hover:text-indigo-600 transition-colors flex items-center justify-between ${categoryParam === 'Clothing' ? 'text-indigo-600 font-medium' : ''}`}>
-                  Clothing <ShoppingBag className="w-3 h-3 opacity-50" />
-                </Link>
-              </li>
-              <li>
-                <Link href="/shop?category=Wallpapers" className={`hover:text-indigo-600 transition-colors flex items-center justify-between ${categoryParam === 'Wallpapers' ? 'text-indigo-600 font-medium' : ''}`}>
-                  Wallpapers <Paintbrush className="w-3 h-3 opacity-50" />
-                </Link>
-              </li>
-            </ul>
+              );
+            })}
           </div>
         </aside>
 
-        {/* Product Grid */}
-        <main className="flex-1">
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">
-              {categoryParam ? categoryParam : "All Products"}
-            </h1>
-            <span className="text-sm text-gray-500">{products.length} Products</span>
+        <main className="min-w-0">
+          <div className="mb-6 flex flex-col gap-4 rounded-[2rem] border border-stone-200/80 bg-white px-6 py-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.28em] text-stone-500">Collection</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-stone-900">
+                {activeCategory.label}
+              </h2>
+            </div>
+            <div className="rounded-full bg-stone-100 px-4 py-2 text-sm font-medium text-stone-600">
+              {loading ? "Loading pieces..." : productCountLabel}
+            </div>
           </div>
 
-          {loading ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="animate-pulse bg-gray-100 rounded-2xl aspect-[3/4]" />
-              ))}
+          {errorMessage ? (
+            <div className="rounded-[2rem] border border-red-200 bg-red-50 px-6 py-10 text-center text-red-700">
+              <p className="text-lg font-semibold">Collection unavailable</p>
+              <p className="mt-2 text-sm">{errorMessage}</p>
             </div>
-          ) : products.length > 0 ? (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => (
-                <div key={product._id} className="group relative flex flex-col bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300">
-                  <Link href={`/product/${product._id}`} className="block relative aspect-[4/5] bg-gray-50 overflow-hidden">
-                    <img
-                      src={product.imageUrl || "/placeholder.jpg"}
-                      alt={product.name}
-                      className="absolute inset-0 w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
-                    />
-                    {product.stock <= 0 && (
-                      <div className="absolute top-4 left-4 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wide">
-                        Out of stock
-                      </div>
-                    )}
-                  </Link>
-                  <div className="p-5 flex flex-col flex-1">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <h3 className="font-semibold text-gray-900 line-clamp-1">{product.name}</h3>
-                        <p className="text-xs text-gray-500 mt-1">{product.category}</p>
-                      </div>
-                      <p className="font-bold text-indigo-600 whitespace-nowrap ml-2">₹{product.price}</p>
-                    </div>
-                    <button
-                      onClick={() => addItem({ id: product._id, name: product.name, price: product.price, quantity: 1, image: product.imageUrl })}
-                      disabled={product.stock <= 0}
-                      className="mt-auto w-full rounded-full bg-gray-900 py-3 text-sm font-medium text-white shadow-sm hover:bg-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                      {product.stock > 0 ? "Add to Cart" : "Out of Stock"}
-                    </button>
+          ) : loading ? (
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-[2rem] border border-stone-200/70 bg-white shadow-sm"
+                >
+                  <div className="aspect-[4/5] animate-pulse bg-stone-100" />
+                  <div className="space-y-4 p-5">
+                    <div className="h-4 w-2/3 animate-pulse rounded-full bg-stone-100" />
+                    <div className="h-4 w-1/3 animate-pulse rounded-full bg-stone-100" />
+                    <div className="h-11 animate-pulse rounded-full bg-stone-100" />
                   </div>
                 </div>
               ))}
             </div>
+          ) : products.length > 0 ? (
+            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+              {products.map((product) => (
+                (() => {
+                  const preferredVariant = getPreferredVariant(product);
+
+                  return (
+                    <article
+                      key={product._id}
+                      className="group overflow-hidden rounded-[2rem] border border-stone-200/70 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(28,25,23,0.08)]"
+                    >
+                      <Link href={`/product/${product._id}`} className="relative block aspect-[4/5] overflow-hidden bg-stone-100">
+                        <ProductImage product={product} />
+                        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-stone-900/30 to-transparent" />
+                        {product.stock <= 0 && (
+                          <div className="absolute left-4 top-4 rounded-full bg-stone-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-white">
+                            Sold out
+                          </div>
+                        )}
+                      </Link>
+                      <div className="flex h-[220px] flex-col p-5">
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.28em] text-stone-500">
+                              {formatCategoryLabel(product.category)}
+                            </p>
+                            <h3 className="mt-2 text-lg font-semibold tracking-[-0.02em] text-stone-900">
+                              {product.title}
+                            </h3>
+                          </div>
+                          <p className="whitespace-nowrap text-lg font-semibold text-amber-800">
+                            ₹{(preferredVariant?.price ?? product.basePrice).toLocaleString()}
+                          </p>
+                        </div>
+                        <p className="line-clamp-2 text-sm leading-6 text-stone-600">{product.description}</p>
+                        <div className="mt-3 text-xs text-stone-500">
+                          {preferredVariant ? `Quick add: ${preferredVariant.label}` : "Choose an option on the product page"}
+                        </div>
+                        <div className="mt-auto flex items-center gap-3 pt-5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!preferredVariant) {
+                                return;
+                              }
+
+                              addItem({
+                                id: `${product._id}:${preferredVariant.sku}`,
+                                productId: product._id,
+                                variantSku: preferredVariant.sku,
+                                variantLabel: preferredVariant.label,
+                                name: product.title,
+                                price: preferredVariant.price,
+                                quantity: 1,
+                                image: product.imageUrl,
+                              });
+                            }}
+                            disabled={product.stock <= 0 || !preferredVariant}
+                            className="inline-flex flex-1 items-center justify-center rounded-full bg-stone-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-stone-300"
+                          >
+                            {product.stock > 0 ? "Quick add" : "Unavailable"}
+                          </button>
+                          <Link
+                            href={`/product/${product._id}`}
+                            className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 text-stone-700 transition-colors hover:border-amber-200 hover:text-amber-700"
+                            aria-label={`View ${product.title}`}
+                          >
+                            <ArrowRight className="h-4 w-4" />
+                          </Link>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })()
+              ))}
+            </div>
           ) : (
-            <div className="text-center py-20 bg-gray-50 rounded-3xl border border-dashed">
-              <ShoppingBag className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">No products found</h3>
-              <p className="mt-1 text-gray-500">We couldn't find any products in this category.</p>
-              <Link href="/shop" className="mt-6 inline-block text-indigo-600 font-medium hover:underline">
-                View all products
+            <div className="rounded-[2rem] border border-dashed border-stone-300 bg-white px-6 py-16 text-center">
+              <ShoppingBag className="mx-auto h-12 w-12 text-stone-300" />
+              <h3 className="mt-5 text-xl font-semibold text-stone-900">No products in this collection yet</h3>
+              <p className="mt-2 text-sm text-stone-500">
+                Try another category or return to the full catalogue.
+              </p>
+              <Link
+                href="/shop"
+                className="mt-6 inline-flex items-center justify-center rounded-full bg-stone-900 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+              >
+                Browse all products
               </Link>
             </div>
           )}
@@ -143,11 +329,16 @@ function ShopContent() {
 
 export default function ShopPage() {
   return (
-    <Suspense fallback={
-      <div className="container mx-auto px-4 py-12 flex justify-center items-center h-96">
-        <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] items-center justify-center bg-[linear-gradient(180deg,#fffcf7_0%,#ffffff_100%)]">
+          <div className="flex items-center gap-3 rounded-full border border-stone-200 bg-white px-5 py-3 text-sm font-medium text-stone-600 shadow-sm">
+            <div className="h-5 w-5 rounded-full border-2 border-amber-200 border-t-amber-700 animate-spin" />
+            Loading collection
+          </div>
+        </div>
+      }
+    >
       <ShopContent />
     </Suspense>
   );

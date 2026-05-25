@@ -6,6 +6,8 @@ const allowedOrigins = [
   'https://admin.aurenzashop.in',
   process.env.BUYER_URL || 'http://localhost:3000',
   process.env.ADMIN_URL || 'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3001',
 ];
 
 const corsOptions = {
