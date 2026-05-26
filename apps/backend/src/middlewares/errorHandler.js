@@ -21,7 +21,7 @@ const errorHandler = (err, req, res, _next) => {
   if (err.code === 11000) {
     statusCode = 409;
     const field = Object.keys(err.keyValue)[0];
-    message = `An account with this ${field} already exists.`;
+    message = `Duplicate value detected for ${field}. Please use a different value.`;
   }
 
   // Mongoose Cast Error (invalid ObjectId)
@@ -50,6 +50,11 @@ const errorHandler = (err, req, res, _next) => {
   if (err.code === 'LIMIT_UNEXPECTED_FILE') {
     statusCode = 400;
     message = 'Too many files uploaded.';
+  }
+
+  if (err.code === 'LIMIT_FILE_COUNT') {
+    statusCode = 400;
+    message = 'You can upload a maximum of 5 images per product.';
   }
 
   // Log server errors

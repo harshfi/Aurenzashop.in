@@ -1,112 +1,148 @@
 import Link from "next/link";
-import { ArrowRight, ShoppingBag, Paintbrush } from "lucide-react";
+import { ArrowRight, Sparkles, ShieldCheck, Truck, CreditCard, Star } from "lucide-react";
+
+const stats = [
+  ["18K+", "Happy Customers"],
+  ["80+", "Curated Styles"],
+  ["4.8/5", "Average Ratings"],
+  ["48H", "Express Dispatch"],
+];
+
+const collections = [
+  {
+    title: "Wedding Edit",
+    subtitle: "Statement silhouettes for celebrations",
+    href: "/shop?collection=Wedding+Edit",
+    image: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=1400&q=80",
+  },
+  {
+    title: "Festive Drop",
+    subtitle: "Rich textures, elevated craftsmanship",
+    href: "/shop?category=festive-collection",
+    image: "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1400&q=80",
+  },
+  {
+    title: "Modern Sarees",
+    subtitle: "Heritage drapes with modern tailoring",
+    href: "/shop?category=sarees",
+    image: "https://images.unsplash.com/photo-1464863979621-258859e62245?auto=format&fit=crop&w=1400&q=80",
+  },
+];
 
 export default function Home() {
   return (
-    <div className="flex flex-col min-h-screen">
-      <section className="border-b bg-gray-900 text-white">
-        <div className="container mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-2 text-xs font-medium uppercase tracking-wide">
-          <span>Free Shipping Above ₹999</span>
-          <span>Premium Fabric & Prints</span>
-          <span>Easy Return Support</span>
+    <div className="flex min-h-screen flex-col">
+      <section className="border-b border-[#291d120f] bg-[#16110d] text-[#eadccc]">
+        <div className="container mx-auto flex flex-wrap items-center justify-center gap-x-8 gap-y-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em]">
+          <span>Free Shipping Above ₹1499</span>
+          <span>Premium Festive Craftsmanship</span>
+          <span>Easy Size Exchange</span>
         </div>
       </section>
 
-      {/* Hero Section */}
-      <section className="relative flex-1 flex flex-col justify-center overflow-hidden bg-indigo-50/50 pt-20 pb-32">
-        <div className="absolute inset-0 bg-[url('/hero-pattern.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" />
-        <div className="container relative mx-auto px-4 text-center">
-          <div className="mx-auto max-w-3xl">
-            <h1 className="text-5xl font-extrabold tracking-tight text-gray-900 sm:text-7xl mb-8 leading-tight">
-              Elevate Your <span className="text-indigo-600">Style</span> & <span className="text-indigo-600">Space</span>
-            </h1>
-            <p className="mx-auto mb-10 max-w-xl text-lg text-gray-600 leading-relaxed">
-              Discover our curated collection of premium clothing and elegant wallpapers. Designed for those who appreciate the finer things in life.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/shop?category=clothing" className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-full bg-indigo-600 px-8 py-4 text-sm font-semibold text-white shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all">
-                Shop Clothing <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link href="/shop?category=wallpaper" className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-full bg-white px-8 py-4 text-sm font-semibold text-gray-900 shadow-md ring-1 ring-inset ring-gray-200 hover:bg-gray-50 hover:scale-105 transition-all">
-                Shop Wallpapers <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Categories */}
-      <section className="py-24 bg-white">
-        <div className="container mx-auto px-4">
-          <div className="mb-16 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Featured Categories</h2>
-            <p className="mt-4 text-gray-500">Explore our most popular collections</p>
-          </div>
-          <div className="grid gap-8 sm:grid-cols-2 lg:max-w-4xl lg:mx-auto">
-            <Link href="/shop?category=clothing" className="group relative overflow-hidden rounded-3xl bg-gray-100 aspect-[4/3] flex flex-col justify-end p-8 transition-transform hover:-translate-y-2">
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent z-10" />
-              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center group-hover:scale-110 transition-transform duration-700" />
-              <div className="relative z-20">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white">
-                    <ShoppingBag className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white">Premium Clothing</h3>
-                </div>
-                <p className="text-gray-200 font-medium flex items-center gap-2 group-hover:text-white transition-colors">
-                  Explore Collection <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                </p>
-              </div>
-            </Link>
-            
-            <Link href="/shop?category=wallpaper" className="group relative overflow-hidden rounded-3xl bg-gray-100 aspect-[4/3] flex flex-col justify-end p-8 transition-transform hover:-translate-y-2">
-              <div className="absolute inset-0 bg-gradient-to-t from-gray-900/80 to-transparent z-10" />
-              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1615529182904-14819c35db37?q=80&w=800&auto=format&fit=crop')] bg-cover bg-center group-hover:scale-110 transition-transform duration-700" />
-              <div className="relative z-20">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-white/20 backdrop-blur-md rounded-full text-white">
-                    <Paintbrush className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white">Elegant Wallpapers</h3>
-                </div>
-                <p className="text-gray-200 font-medium flex items-center gap-2 group-hover:text-white transition-colors">
-                  Explore Collection <ArrowRight className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                </p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="bg-gray-50 py-20">
-        <div className="container mx-auto px-4">
-          <div className="mb-12 text-center">
-            <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Style Spotlight</h2>
-            <p className="mt-3 text-gray-500">Curated picks for wardrobe and walls</p>
-          </div>
-          <div className="grid gap-6 lg:grid-cols-3">
-            <Link href="/shop?category=clothing" className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">New Arrivals</p>
-              <h3 className="mt-2 text-xl font-semibold text-gray-900">Everyday Ethnic Wear</h3>
-              <p className="mt-2 text-sm text-gray-600">Fresh silhouettes, breathable fabrics, and timeless motifs.</p>
-              <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-900">Explore Clothing <ArrowRight className="h-4 w-4" /></span>
-            </Link>
-            <Link href="/shop?category=wallpaper" className="group rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:-translate-y-1 hover:shadow-md">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">Best Sellers</p>
-              <h3 className="mt-2 text-xl font-semibold text-gray-900">Signature Wall Prints</h3>
-              <p className="mt-2 text-sm text-gray-600">Statement walls with elegant textures and calming palettes.</p>
-              <span className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gray-900">Explore Wallpapers <ArrowRight className="h-4 w-4" /></span>
-            </Link>
-            <div className="rounded-2xl border border-indigo-200 bg-indigo-600 p-6 text-white shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-indigo-100">Aurenza Promise</p>
-              <h3 className="mt-2 text-xl font-semibold">Premium Quality, Everyday Luxury</h3>
-              <p className="mt-3 text-sm text-indigo-100">
-                Handpicked products, secure checkout, and attentive post-order support by the Aurenza team.
+      <section className="container mx-auto px-4 pt-8 sm:pt-10 pb-6 animate-rise">
+        <div className="section-shell overflow-hidden rounded-[2rem]">
+          <div className="grid gap-8 lg:grid-cols-2 p-7 sm:p-10 lg:p-14">
+            <div className="space-y-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8a5a2d]">Aurenza Spring Atelier 2026</p>
+              <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl leading-[0.95] text-[#18130f]">
+                Crafted For Grand Celebrations
+              </h1>
+              <p className="max-w-xl text-[#4f4032] text-base sm:text-lg leading-relaxed">
+                Discover premium sarees, festive gowns, and signature fusion silhouettes by Aurenza. Designed for women who want timeless elegance with contemporary confidence.
               </p>
-              <Link href="/shop" className="mt-6 inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">
-                Shop All Products
-              </Link>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/shop" className="inline-flex items-center justify-center gap-2 rounded-full bg-[#19130d] px-7 py-3 text-sm font-semibold text-white hover:bg-[#2b2017] transition-colors">
+                  Shop New Season <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link href="/shop?bestseller=true" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#2a1d121f] bg-white px-7 py-3 text-sm font-semibold text-[#2c2117] hover:bg-[#faf4ec] transition-colors">
+                  Explore Best Sellers
+                </Link>
+              </div>
             </div>
+
+            <div className="rounded-[1.6rem] overflow-hidden min-h-[360px] lg:min-h-[460px] relative bg-[#efe4d8]">
+              <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=1400&q=80')] bg-cover bg-center" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#140f0a99] via-[#140f0a1f] to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 rounded-2xl bg-white/90 p-4 backdrop-blur-sm">
+                <p className="text-xs uppercase tracking-[0.16em] text-[#8a5a2d] font-semibold">Signature Edit</p>
+                <p className="mt-1 font-display text-2xl text-[#16110d]">Hand-finished festive pieces</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 border-t border-[#2a1d120f] p-5 sm:p-6 bg-[#fffdfa]">
+            {stats.map(([value, label]) => (
+              <div key={label} className="rounded-2xl border border-[#2a1d120f] bg-white px-4 py-4">
+                <p className="text-2xl sm:text-3xl font-extrabold text-[#18130f]">{value}</p>
+                <p className="text-[10px] mt-1 uppercase tracking-[0.16em] text-[#8a5a2d] font-semibold">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="container mx-auto px-4 py-10 sm:py-12 animate-rise">
+        <div className="mb-6 flex items-end justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[#8a5a2d] font-semibold">Collection First</p>
+            <h2 className="font-display text-4xl text-[#16110d]">Explore Curated Edits</h2>
+          </div>
+          <Link href="/shop" className="text-sm font-semibold text-[#8a5a2d] hover:underline">View All</Link>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          {collections.map((collection) => (
+            <Link key={collection.title} href={collection.href} className="group relative overflow-hidden rounded-[1.8rem] min-h-[360px] section-shell">
+              <div className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-105" style={{ backgroundImage: `url(${collection.image})` }} />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#130d08d9] via-[#130d0833] to-transparent" />
+              <div className="absolute left-6 right-6 bottom-6">
+                <h3 className="font-display text-3xl text-white">{collection.title}</h3>
+                <p className="mt-1 text-sm text-[#eadfce]">{collection.subtitle}</p>
+                <span className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-white">Explore <ArrowRight className="h-4 w-4" /></span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="container mx-auto px-4 py-10 sm:py-12 animate-rise">
+        <div className="texture-card rounded-[2rem] border border-[#2a1d1214] p-7 sm:p-10">
+          <div className="grid gap-6 md:grid-cols-3">
+            <div className="rounded-2xl border border-[#2a1d120f] bg-white p-5">
+              <ShieldCheck className="h-5 w-5 text-[#8a5a2d]" />
+              <h3 className="mt-3 text-lg font-semibold text-[#16110d]">Secure Checkout</h3>
+              <p className="mt-1 text-sm text-[#5c4b3b]">Industry-grade payment security and transparent order confirmations.</p>
+            </div>
+            <div className="rounded-2xl border border-[#2a1d120f] bg-white p-5">
+              <Truck className="h-5 w-5 text-[#8a5a2d]" />
+              <h3 className="mt-3 text-lg font-semibold text-[#16110d]">Express Delivery</h3>
+              <p className="mt-1 text-sm text-[#5c4b3b]">Fast dispatch and real-time status updates from warehouse to doorstep.</p>
+            </div>
+            <div className="rounded-2xl border border-[#2a1d120f] bg-white p-5">
+              <CreditCard className="h-5 w-5 text-[#8a5a2d]" />
+              <h3 className="mt-3 text-lg font-semibold text-[#16110d]">Easy Exchanges</h3>
+              <p className="mt-1 text-sm text-[#5c4b3b]">Size-exchange support with attentive customer care from Aurenza team.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="container mx-auto px-4 pb-16 sm:pb-20 animate-rise">
+        <div className="section-shell rounded-[2rem] p-7 sm:p-10 text-center">
+          <p className="text-xs uppercase tracking-[0.2em] text-[#8a5a2d] font-semibold">Customer Love</p>
+          <h2 className="mt-2 font-display text-4xl text-[#16110d]">Why Shoppers Trust Aurenza</h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-3 text-left">
+            {[
+              "Beautiful finishing, true fit, and premium feel exactly as expected.",
+              "Wedding order arrived on time and the fabric quality was exceptional.",
+              "The support team handled my size exchange quickly and professionally.",
+            ].map((quote) => (
+              <article key={quote} className="rounded-2xl border border-[#2a1d120f] bg-white p-5">
+                <Star className="h-4 w-4 text-[#8a5a2d] fill-[#8a5a2d]" />
+                <p className="mt-3 text-sm leading-relaxed text-[#4f4032]">{quote}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>

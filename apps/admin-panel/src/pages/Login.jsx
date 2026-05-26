@@ -13,10 +13,7 @@ export default function Login() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    // If already logged in, redirect to dashboard
-    if (admin) {
-      navigate("/", { replace: true });
-    }
+    if (admin) navigate("/", { replace: true });
   }, [admin, navigate]);
 
   const handleSubmit = async (e) => {
@@ -34,63 +31,31 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f0f1a] text-white flex items-center justify-center p-4">
-      {/* Background blur decorative element */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full bg-[#e94560]/10 blur-[80px] pointer-events-none" />
-
-      <div className="w-full max-w-md glass rounded-2xl border border-white/5 p-8 relative z-10 shadow-2xl">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-[radial-gradient(circle_at_top,#dbeafe,transparent_35%),linear-gradient(to_bottom,#f8fafc,#ffffff)]">
+      <div className="w-full max-w-md glass rounded-3xl p-8 relative z-10">
         <div className="text-center space-y-3 mb-8">
-          <div className="inline-flex p-3.5 rounded-full bg-[#e94560]/10 border border-[#e94560]/20 text-[#e94560] mb-2">
+          <div className="inline-flex p-3.5 rounded-full bg-indigo-100 text-indigo-700 mb-2">
             <Shield className="h-7 w-7" />
           </div>
-          <h2 className="font-playfair text-3xl font-bold tracking-widest text-[#e94560]">AURENZA</h2>
-          <p className="text-text-secondary text-xs uppercase tracking-wider">Admin Console Sign In</p>
+          <h2 className="text-3xl font-bold tracking-tight text-indigo-950">Aurenza Admin</h2>
+          <p className="text-slate-500 text-xs uppercase tracking-[0.18em]">Sign in to manage store</p>
         </div>
 
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs py-3 px-4 rounded-xl mb-6 font-medium">
-            ⚠️ {error}
-          </div>
-        )}
+        {error && <div className="bg-red-50 border border-red-200 text-red-600 text-xs py-3 px-4 rounded-xl mb-6 font-medium">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-1.5">
-            <label className="text-xs text-text-secondary uppercase tracking-wider font-semibold">Email Address</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="admin@aurenzashop.in"
-              className="w-full bg-[#16213e]/40 border border-white/5 text-sm p-3.5 rounded-xl focus:outline-none focus:border-[#e94560]/40 transition-colors"
-            />
+            <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Email Address</label>
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@aurenzashop.in" className="w-full bg-white border border-slate-200 text-sm p-3.5 rounded-xl focus:outline-none focus:border-indigo-400" />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs text-text-secondary uppercase tracking-wider font-semibold">Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full bg-[#16213e]/40 border border-white/5 text-sm p-3.5 rounded-xl focus:outline-none focus:border-[#e94560]/40 transition-colors"
-            />
+            <label className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Password</label>
+            <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="w-full bg-white border border-slate-200 text-sm p-3.5 rounded-xl focus:outline-none focus:border-indigo-400" />
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-[#e94560] to-red-500 hover:opacity-95 text-white font-semibold py-3.5 rounded-xl transition-all shadow-lg shadow-[#e94560]/15 cursor-pointer mt-4 h-12 text-sm"
-          >
-            {loading ? (
-              <Loader2 className="h-4.5 w-4.5 animate-spin" />
-            ) : (
-              <>
-                <span>Sign In</span>
-                <ArrowRight className="h-4.5 w-4.5" />
-              </>
-            )}
+          <button type="submit" disabled={loading} className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3.5 rounded-xl transition-all cursor-pointer mt-4 h-12 text-sm disabled:opacity-70">
+            {loading ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <><span>Sign In</span><ArrowRight className="h-4.5 w-4.5" /></>}
           </button>
         </form>
       </div>

@@ -63,15 +63,15 @@ export default function CartDrawer({ isOpen, onClose }: { isOpen: boolean; onClo
                     </div>
                     <div className="flex flex-1 items-end justify-between text-sm">
                       <div className="flex items-center border rounded-lg bg-white">
-                        <button onClick={() => updateQuantity(item.id, Math.max(1, item.quantity - 1))} className="p-2 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                        <button onClick={() => updateQuantity(item.lineId || `${item.id}::${item.variantSku || "default"}`, Math.max(1, item.quantity - 1))} className="p-2 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
                           <Minus className="h-3 w-3" />
                         </button>
                         <span className="px-3 font-medium text-gray-900">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="p-2 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
+                        <button onClick={() => updateQuantity(item.lineId || `${item.id}::${item.variantSku || "default"}`, item.quantity + 1)} className="p-2 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
                           <Plus className="h-3 w-3" />
                         </button>
                       </div>
-                      <button type="button" onClick={() => removeItem(item.id)} className="font-medium text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors">
+                      <button type="button" onClick={() => removeItem(item.lineId || `${item.id}::${item.variantSku || "default"}`)} className="font-medium text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors">
                         <Trash2 className="h-4 w-4" /> <span className="sr-only">Remove</span>
                       </button>
                     </div>

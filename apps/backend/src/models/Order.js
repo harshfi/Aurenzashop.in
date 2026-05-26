@@ -47,6 +47,20 @@ const trackingEntrySchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 }, { _id: false });
 
+const lifecycleEventSchema = new mongoose.Schema({
+  action: { type: String, required: true },
+  fromStatus: { type: String, default: null },
+  toStatus: { type: String, default: null },
+  actorType: {
+    type: String,
+    enum: ['system', 'admin', 'buyer'],
+    default: 'system',
+  },
+  actorId: { type: String, default: null },
+  note: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: false });
+
 const orderSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,
@@ -65,6 +79,21 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0,
+  },
+  subTotalAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  discountAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  couponCode: {
+    type: String,
+    default: null,
+    trim: true,
   },
   paymentMethod: {
     type: String,
@@ -97,14 +126,49 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: null,
   },
+  refundStatus: {
+    type: String,
+    enum: ['none', 'requested', 'processing', 'refunded', 'rejected'],
+    default: 'none',
+  },
+  refundAmount: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
+  refundReason: {
+    type: String,
+    default: '',
+  },
+  refundedAt: {
+    type: Date,
+    default: null,
+  },
+  cancellationReason: {
+    type: String,
+    default: '',
+  },
+  cancelledAt: {
+    type: Date,
+    default: null,
+  },
+  idempotencyKey: {
+    type: String,
+    default: null,
+    trim: true,
+  },
   trackingHistory: [trackingEntrySchema],
+  lifecycleEvents: [lifecycleEventSchema],
 }, {
   timestamps: true,
 });
 
 // Indexes for common queries
 orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ user: 1, idempotencyKey: 1 }, { unique: true, sparse: true });
 orderSchema.index({ orderStatus: 1 });
+orderSchema.index({ couponCode: 1, paymentStatus: 1 });
+orderSchema.index({ refundStatus: 1, createdAt: -1 });
 orderSchema.index({ razorpayOrderId: 1 });
 orderSchema.index({ delhiveryAWB: 1 });
 

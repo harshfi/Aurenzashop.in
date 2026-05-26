@@ -1,6 +1,12 @@
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
 
+const hasCloudinaryConfig = () => (
+  Boolean(process.env.CLOUDINARY_CLOUD_NAME)
+  && Boolean(process.env.CLOUDINARY_API_KEY)
+  && Boolean(process.env.CLOUDINARY_API_SECRET)
+);
+
 /**
  * Upload a single image buffer to Cloudinary
  * @param {Buffer} buffer - Image file buffer from Multer
@@ -8,6 +14,12 @@ const streamifier = require('streamifier');
  * @returns {Object} { url, publicId }
  */
 const uploadImage = (buffer, folder = 'aurenza/products') => {
+  if (!hasCloudinaryConfig()) {
+    const error = new Error('Image upload service is not configured. Please set Cloudinary environment variables.');
+    error.statusCode = 500;
+    throw error;
+  }
+
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -17,10 +29,12 @@ const uploadImage = (buffer, folder = 'aurenza/products') => {
         fetch_format: 'auto',
       },
       (error, result) => {
-        if (error) {
-          console.error('Cloudinary upload error:', error);
-          return reject(new Error('Image upload failed.'));
+        if (error || !result?.secure_url || !result?.public_id) {
+          const uploadError = new Error('Image upload failed. Please try again.');
+          uploadError.statusCode = 502;
+          return reject(uploadError);
         }
+
         resolve({
           url: result.secure_url,
           publicId: result.public_id,
@@ -52,7 +66,6 @@ const deleteImage = async (publicId) => {
     await cloudinary.uploader.destroy(publicId);
   } catch (error) {
     console.error('Cloudinary delete error:', error);
-    // Don't throw — image deletion failure shouldn't block other operations
   }
 };
 
@@ -65,9 +78,7 @@ const getPublicIdFromUrl = (url) => {
   try {
     const parts = url.split('/');
     const uploadIndex = parts.indexOf('upload');
-    // Skip the version number (v1234567890) after 'upload'
     const relevantParts = parts.slice(uploadIndex + 2);
-    // Remove file extension
     const lastPart = relevantParts[relevantParts.length - 1];
     relevantParts[relevantParts.length - 1] = lastPart.replace(/\.[^/.]+$/, '');
     return relevantParts.join('/');

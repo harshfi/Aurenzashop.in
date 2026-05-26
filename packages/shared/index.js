@@ -1,6 +1,15 @@
 export const CATEGORY_LIST = [
-  "clothing",
-  "wallpaper"
+  "sarees",
+  "lehengas",
+  "kurtas-kurta-sets",
+  "gowns",
+  "fusion-wear",
+  "dupattas-accessories",
+  "seasonal-special",
+  "ethnic-wear",
+  "festive-collection",
+  "accessories",
+  "mens-ethnic"
 ];
 
 export const ORDER_STATUSES = {

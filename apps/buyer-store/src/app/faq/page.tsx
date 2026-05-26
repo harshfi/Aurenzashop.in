@@ -9,7 +9,7 @@ export default function FaqPage() {
       sections={[
         {
           heading: "What does Aurenza sell?",
-          body: "Aurenza offers premium clothing and elegant wallpapers for personal style and interior spaces.",
+          body: "Aurenza sells premium single-brand fashion including sarees, gowns, festive sets, fusion wear, and curated accessories.",
         },
         {
           heading: "Can I track my order?",

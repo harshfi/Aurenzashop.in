@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
+const User = require('../models/User');
+const { assertInternalKey } = require('../utils/internalAuth');
 
 /**
  * Admin Login — POST /api/auth/admin/login
@@ -8,16 +10,24 @@ const Admin = require('../models/Admin');
 const adminLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || '').trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({
         success: false,
         message: 'Email and password are required.',
       });
     }
 
+    if (!process.env.ADMIN_JWT_SECRET) {
+      return res.status(500).json({
+        success: false,
+        message: 'Admin authentication is not configured.',
+      });
+    }
+
     // Find admin and explicitly select password
-    const admin = await Admin.findOne({ email }).select('+password');
+    const admin = await Admin.findOne({ email: normalizedEmail }).select('+password');
 
     if (!admin) {
       return res.status(401).json({
@@ -70,9 +80,12 @@ const adminLogin = async (req, res, next) => {
  * Clears the JWT cookie.
  */
 const adminLogout = async (req, res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
   res.cookie('admin_token', '', {
     httpOnly: true,
     expires: new Date(0),
+    secure: isProduction,
+    sameSite: isProduction ? 'strict' : 'lax',
     path: '/',
   });
 
@@ -130,7 +143,13 @@ const updateBuyerProfile = async (req, res, next) => {
     const user = req.user;
 
     if (name) user.name = name;
-    if (phone) user.phone = phone;
+    if (phone) {
+      const normalizedPhone = String(phone).replace(/\s+/g, '');
+      if (!/^[0-9+()-]{8,18}$/.test(normalizedPhone)) {
+        return res.status(400).json({ success: false, message: 'Invalid phone format.' });
+      }
+      user.phone = normalizedPhone;
+    }
     if (addresses) user.addresses = addresses;
 
     await user.save();
@@ -144,6 +163,95 @@ const updateBuyerProfile = async (req, res, next) => {
   }
 };
 
+const getBuyerProfileByEmailInternal = async (req, res, next) => {
+  try {
+    if (!assertInternalKey(req, res)) return;
+
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    let user = await User.findOne({ email }).lean();
+    if (!user) {
+      user = await User.create({
+        name: email.split('@')[0] || 'Aurenza Buyer',
+        email,
+        authProvider: 'google',
+        providerId: null,
+      });
+      user = user.toObject();
+    }
+
+    return res.json({ success: true, user });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const updateBuyerProfileByEmailInternal = async (req, res, next) => {
+  try {
+    if (!assertInternalKey(req, res)) return;
+
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    const payload = req.body || {};
+    const updates = {};
+
+    if (payload.name !== undefined) {
+      const name = String(payload.name || '').trim();
+      if (!name) {
+        return res.status(400).json({ success: false, message: 'Name cannot be empty.' });
+      }
+      updates.name = name;
+    }
+
+    if (payload.phone !== undefined) {
+      const normalizedPhone = String(payload.phone || '').replace(/\\s+/g, '');
+      if (normalizedPhone && !/^[0-9+()-]{8,18}$/.test(normalizedPhone)) {
+        return res.status(400).json({ success: false, message: 'Invalid phone format.' });
+      }
+      updates.phone = normalizedPhone || null;
+    }
+
+    if (payload.addresses !== undefined) {
+      if (!Array.isArray(payload.addresses)) {
+        return res.status(400).json({ success: false, message: 'Addresses must be an array.' });
+      }
+      updates.addresses = payload.addresses.map((address) => ({
+        street: String(address.street || '').trim(),
+        city: String(address.city || '').trim(),
+        state: String(address.state || '').trim(),
+        pinCode: String(address.pinCode || '').trim(),
+        phone: String(address.phone || '').trim(),
+        isDefault: Boolean(address.isDefault),
+      }));
+    }
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = await User.create({
+        name: updates.name || email.split('@')[0] || 'Aurenza Buyer',
+        email,
+        phone: updates.phone || null,
+        addresses: updates.addresses || [],
+        authProvider: 'google',
+        providerId: null,
+      });
+    } else {
+      Object.assign(user, updates);
+      await user.save();
+    }
+
+    return res.json({ success: true, user });
+  } catch (error) {
+    return next(error);
+  }
+};
+
 module.exports = {
   adminLogin,
   adminLogout,
@@ -151,4 +259,6 @@ module.exports = {
   getBuyerProfile,
   verifyBuyerGoogleSession,
   updateBuyerProfile,
+  getBuyerProfileByEmailInternal,
+  updateBuyerProfileByEmailInternal,
 };

@@ -5,9 +5,9 @@ import Footer from "@/components/Footer";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Aurenza | Premium Clothing & Wallpapers",
+  title: "Aurenza | Premium Ethnic Fashion",
   description:
-    "Discover the latest trends in clothing and elegant wallpapers to elevate your style and space.",
+    "Discover premium Aurenza ethnic wear, sarees, gowns, and festive collections crafted for modern luxury.",
 };
 
 export default function RootLayout({

@@ -8,6 +8,8 @@ import Dashboard from "./pages/Dashboard";
 import ProductManager from "./pages/ProductManager";
 import ProductForm from "./pages/ProductForm";
 import OrderManager from "./pages/OrderManager";
+import CouponManager from "./pages/CouponManager";
+import CustomerManager from "./pages/CustomerManager";
 
 export default function App() {
   return (
@@ -31,6 +33,8 @@ export default function App() {
             <Route path="products/new" element={<ProductForm />} />
             <Route path="products/:id/edit" element={<ProductForm />} />
             <Route path="orders" element={<OrderManager />} />
+            <Route path="coupons" element={<CouponManager />} />
+            <Route path="customers" element={<CustomerManager />} />
           </Route>
         </Routes>
       </BrowserRouter>

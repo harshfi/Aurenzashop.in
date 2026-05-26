@@ -1,12 +1,31 @@
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/Admin');
 
+const sameOriginAllowed = new Set([
+  process.env.ADMIN_URL || 'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'https://admin.aurenzashop.in',
+]);
+
+const isStateChangingMethod = (method = '') => !['GET', 'HEAD', 'OPTIONS'].includes(String(method).toUpperCase());
+
 /**
  * Admin Authentication Middleware
  * Validates the admin JWT stored in an HTTP-only cookie.
  */
 const adminAuth = async (req, res, next) => {
   try {
+    if (isStateChangingMethod(req.method)) {
+      const origin = req.get('origin');
+      if (origin && !sameOriginAllowed.has(origin)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Invalid request origin.',
+        });
+      }
+    }
+
     const token = req.cookies?.admin_token;
 
     if (!token) {

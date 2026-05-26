@@ -14,6 +14,8 @@ const buyerAuth = async (req, res, next) => {
     const authHeader = req.headers.authorization || '';
     const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
     const cookieToken =
+      req.cookies?.['authjs.session-token'] ||
+      req.cookies?.['__Secure-authjs.session-token'] ||
       req.cookies?.['next-auth.session-token'] ||
       req.cookies?.['__Secure-next-auth.session-token'] ||
       null;
@@ -31,6 +33,12 @@ const buyerAuth = async (req, res, next) => {
     let decoded;
     try {
       const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+      if (!authSecret) {
+        return res.status(500).json({
+          success: false,
+          message: 'Buyer authentication secret is not configured.',
+        });
+      }
       decoded = jwt.verify(token, authSecret);
     } catch (_err) {
       return res.status(401).json({

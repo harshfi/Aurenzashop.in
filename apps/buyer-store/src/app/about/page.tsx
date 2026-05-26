@@ -4,12 +4,12 @@ export default function AboutPage() {
   return (
     <InfoPage
       eyebrow="About Aurenza"
-      title="Modern Indian Style, Curated With Care"
-      intro="Aurenza is a clothing and lifestyle brand focused on premium quality, elegant design, and dependable shopping support."
+      title="Modern Indian Couture, Curated With Care"
+      intro="Aurenza is a premium direct-to-consumer fashion house focused on elevated ethnic craftsmanship, elegant tailoring, and dependable service."
       sections={[
         {
           heading: "What We Offer",
-          body: "From everyday ethnic wear to statement wall designs, we curate products that elevate your personal style and living spaces.",
+          body: "From timeless sarees to statement festive gowns and fusion silhouettes, every Aurenza edit is designed for modern Indian celebrations.",
         },
         {
           heading: "Quality Promise",

@@ -41,6 +41,10 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [couponMessage, setCouponMessage] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"razorpay" | "cod">("razorpay");
   const [formData, setFormData] = useState({
     firstName: "",
@@ -53,6 +57,7 @@ export default function CheckoutPage() {
     postalCode: "",
   });
   const mounted = useHasMounted();
+  const finalTotal = Math.max(0, totalPrice - discountAmount);
 
   if (!mounted) return null;
 
@@ -110,7 +115,50 @@ export default function CheckoutPage() {
         pinCode: formData.postalCode,
         phone: formData.phone,
       },
+      couponCode: couponCode.trim() || null,
     };
+  };
+
+  const applyCoupon = async () => {
+    const normalized = couponCode.trim();
+    if (!normalized) {
+      setCouponMessage("Enter a coupon code.");
+      setDiscountAmount(0);
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponMessage("");
+    try {
+      const res = await fetch(`${API_BASE}/orders/coupon/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          couponCode: normalized,
+          subTotalAmount: totalPrice,
+          items: items.map((item) => ({ category: item.category, brand: item.brand })),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Invalid coupon code.");
+      }
+
+      setDiscountAmount(Number(data.discountAmount || 0));
+      setCouponMessage(`Coupon applied. You saved ₹${Number(data.discountAmount || 0).toLocaleString("en-IN")}.`);
+    } catch (err) {
+      setDiscountAmount(0);
+      setCouponMessage(err instanceof Error ? err.message : "Invalid coupon code.");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const removeCoupon = () => {
+    setCouponCode("");
+    setDiscountAmount(0);
+    setCouponMessage("Coupon removed.");
   };
 
   const handleCheckout = async (e: React.FormEvent) => {
@@ -121,7 +169,10 @@ export default function CheckoutPage() {
     try {
       const createOrderRes = await fetch(`${API_BASE}/orders`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-idempotency-key": `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        },
         credentials: "include",
         body: JSON.stringify(buildOrderPayload()),
       });
@@ -152,7 +203,7 @@ export default function CheckoutPage() {
         amount: razorpay.amount,
         currency: razorpay.currency || "INR",
         name: "Aurenza",
-        description: "Clothing & Wallpaper Purchase",
+        description: "Premium Fashion Purchase",
         order_id: razorpay.orderId,
         prefill: {
           name: `${formData.firstName} ${formData.lastName}`.trim(),
@@ -295,7 +346,7 @@ export default function CheckoutPage() {
                 {loading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
-                  <><Lock className="w-5 h-5 opacity-70" /> {paymentMethod === "razorpay" ? "Pay" : "Place COD Order"} ₹{totalPrice.toLocaleString("en-IN")}</>
+                  <><Lock className="w-5 h-5 opacity-70" /> {paymentMethod === "razorpay" ? "Pay" : "Place COD Order"} ₹{finalTotal.toLocaleString("en-IN")}</>
                 )}
               </button>
               {!session && (
@@ -340,15 +391,55 @@ export default function CheckoutPage() {
                   <p>Subtotal</p>
                   <p className="font-medium text-gray-900">₹{totalPrice.toLocaleString("en-IN")}</p>
                 </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between">
+                    <p>Coupon Discount</p>
+                    <p className="font-medium text-emerald-600">-₹{discountAmount.toLocaleString("en-IN")}</p>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <p>Shipping</p>
                   <p className="font-medium text-green-600">Free</p>
                 </div>
               </div>
 
+              <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                <label htmlFor="coupon" className="mb-2 block text-xs font-semibold uppercase tracking-wide text-gray-600">Coupon Code</label>
+                <div className="flex gap-2">
+                  <input
+                    id="coupon"
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. SAVE10"
+                    className="h-10 flex-1 rounded-xl border border-gray-300 bg-white px-3 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCoupon}
+                    disabled={couponLoading}
+                    className="rounded-xl bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {couponLoading ? "Applying" : "Apply"}
+                  </button>
+                  {discountAmount > 0 && (
+                    <button
+                      type="button"
+                      onClick={removeCoupon}
+                      className="rounded-xl border border-gray-300 px-3 text-sm font-semibold text-gray-700 hover:bg-white"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {couponMessage && (
+                  <p className={`mt-2 text-xs ${discountAmount > 0 ? "text-emerald-700" : "text-rose-700"}`}>{couponMessage}</p>
+                )}
+              </div>
+
               <div className="flex justify-between items-center border-t pt-6">
                 <p className="text-base font-medium text-gray-900">Total</p>
-                <p className="text-2xl font-bold text-gray-900">₹{totalPrice.toLocaleString("en-IN")}</p>
+                <p className="text-2xl font-bold text-gray-900">₹{finalTotal.toLocaleString("en-IN")}</p>
               </div>
             </div>
           </div>

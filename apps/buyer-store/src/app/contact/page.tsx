@@ -5,7 +5,7 @@ export default function ContactPage() {
     <InfoPage
       eyebrow="Support"
       title="Contact Aurenza"
-      intro="Need help with clothing, wallpapers, orders, or delivery? The Aurenza support desk is here to help."
+      intro="Need help with sizing, orders, delivery, or exchanges? The Aurenza support desk is here to help."
       sections={[
         {
           heading: "Email Support",
