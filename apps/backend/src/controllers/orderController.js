@@ -6,6 +6,55 @@ const delhiveryService = require('../services/delhiveryService');
 const emailService = require('../services/emailService');
 const { ORDER_STATUSES, PAYMENT_STATUSES, PAYMENT_METHODS } = require('@aurenza/shared');
 
+const mapDelhiveryStatusToOrderStatus = (status) => {
+  const statusLower = (status || '').toLowerCase();
+
+  if (statusLower.includes('delivered')) {
+    return ORDER_STATUSES.DELIVERED;
+  }
+
+  if (statusLower.includes('out for delivery')) {
+    return ORDER_STATUSES.OUT_FOR_DELIVERY;
+  }
+
+  if (statusLower.includes('in transit') || statusLower.includes('dispatched')) {
+    return ORDER_STATUSES.SHIPPED;
+  }
+
+  return null;
+};
+
+const getTrackingEventSignature = (status, location = '') =>
+  `${String(status || '').trim().toLowerCase()}|${String(location || '').trim().toLowerCase()}`;
+
+const collapseTrackingHistory = (trackingHistory = []) => {
+  const sortedHistory = [...trackingHistory].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  return sortedHistory.reduce((collapsedHistory, entry) => {
+    const normalizedEntry = {
+      status: entry.status || 'Update',
+      location: entry.location || '',
+      timestamp: entry.timestamp ? new Date(entry.timestamp) : new Date(),
+    };
+
+    const lastEntry = collapsedHistory[collapsedHistory.length - 1];
+
+    if (
+      lastEntry &&
+      getTrackingEventSignature(lastEntry.status, lastEntry.location) ===
+        getTrackingEventSignature(normalizedEntry.status, normalizedEntry.location)
+    ) {
+      collapsedHistory[collapsedHistory.length - 1] = normalizedEntry;
+      return collapsedHistory;
+    }
+
+    collapsedHistory.push(normalizedEntry);
+    return collapsedHistory;
+  }, []);
+};
+
 /**
  * Create Order — POST /api/orders
  * Buyer only. Validates stock, creates order, triggers Razorpay + email.
@@ -96,6 +145,28 @@ const createOrder = async (req, res, next) => {
     emailService.sendOrderConfirmation(order, req.user).catch((err) =>
       console.error('Order confirmation email failed:', err)
     );
+
+    // Save address to user if it's new
+    try {
+      const user = await User.findById(req.user._id);
+      if (user) {
+        const addressExists = user.addresses.some(
+          (addr) =>
+            addr.street === shippingAddress.street &&
+            addr.pinCode === shippingAddress.pinCode
+        );
+
+        if (!addressExists) {
+          user.addresses.push({
+            ...shippingAddress,
+            isDefault: user.addresses.length === 0,
+          });
+          await user.save();
+        }
+      }
+    } catch (addrErr) {
+      console.error('Failed to save user address:', addrErr);
+    }
 
     res.status(201).json({
       success: true,
@@ -319,7 +390,7 @@ const packOrder = async (req, res, next) => {
 const updateOrderStatus = async (req, res, next) => {
   try {
     const { status } = req.body;
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id).populate('user', 'name email phone');
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
@@ -429,12 +500,9 @@ const delhiveryWebhook = async (req, res, next) => {
 
     // Update order status based on Delhivery status
     const statusLower = (Status || '').toLowerCase();
-    if (statusLower.includes('in transit') || statusLower.includes('dispatched')) {
-      order.orderStatus = ORDER_STATUSES.SHIPPED;
-    } else if (statusLower.includes('out for delivery')) {
-      order.orderStatus = ORDER_STATUSES.OUT_FOR_DELIVERY;
-    } else if (statusLower.includes('delivered')) {
-      order.orderStatus = ORDER_STATUSES.DELIVERED;
+    const mappedStatus = mapDelhiveryStatusToOrderStatus(Status);
+    if (mappedStatus) {
+      order.orderStatus = mappedStatus;
     }
 
     await order.save();
@@ -447,6 +515,122 @@ const delhiveryWebhook = async (req, res, next) => {
     }
 
     res.status(200).json({ status: 'ok' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get Live Tracking Info — GET /api/orders/admin/:id/tracking or /api/orders/:id/tracking
+ * Fetches live data from Delhivery, syncs into trackingHistory, returns unified tracking info.
+ */
+const getTrackingInfo = async (req, res, next) => {
+  try {
+    const order = await Order.findById(req.params.id).populate('user', 'name email phone');
+
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found.' });
+    }
+
+    // Ownership check for buyer access (req.user is set by buyerAuth)
+    if (req.user && !req.isAdmin && order.user._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied.' });
+    }
+
+    let delhiveryData = null;
+    let delhiveryError = null;
+
+    // If the order has an AWB, try to fetch live tracking from Delhivery
+    if (order.delhiveryAWB) {
+      try {
+        delhiveryData = await delhiveryService.trackShipment(order.delhiveryAWB);
+        let hasNewScans = false;
+        let hasNormalizedHistory = false;
+
+        const existingHistorySnapshot = JSON.stringify(
+          order.trackingHistory.map((entry) => ({
+            status: entry.status || 'Update',
+            location: entry.location || '',
+            timestamp: entry.timestamp ? new Date(entry.timestamp).toISOString() : null,
+          }))
+        );
+
+        const normalizedHistory = collapseTrackingHistory(order.trackingHistory);
+        const normalizedHistorySnapshot = JSON.stringify(
+          normalizedHistory.map((entry) => ({
+            status: entry.status,
+            location: entry.location,
+            timestamp: new Date(entry.timestamp).toISOString(),
+          }))
+        );
+
+        if (existingHistorySnapshot !== normalizedHistorySnapshot) {
+          order.trackingHistory = normalizedHistory;
+          hasNormalizedHistory = true;
+        }
+
+        // Sync Delhivery scans into trackingHistory (avoid duplicates)
+        if (delhiveryData.scans && delhiveryData.scans.length > 0) {
+          const existingSignatures = new Set(
+            order.trackingHistory.map((entry) =>
+              getTrackingEventSignature(entry.status, entry.location)
+            )
+          );
+
+          for (const scan of delhiveryData.scans) {
+            const scanStatus = scan.status || scan.instructions || 'Update';
+            const scanLocation = scan.location || '';
+            const scanSignature = getTrackingEventSignature(scanStatus, scanLocation);
+
+            if (!existingSignatures.has(scanSignature)) {
+              order.trackingHistory.push({
+                status: scanStatus,
+                location: scanLocation,
+                timestamp: scan.timestamp ? new Date(scan.timestamp) : new Date(),
+              });
+              existingSignatures.add(scanSignature);
+              hasNewScans = true;
+            }
+          }
+
+          if (hasNewScans) {
+            order.trackingHistory = collapseTrackingHistory(order.trackingHistory);
+          }
+        }
+
+        const mappedStatus = mapDelhiveryStatusToOrderStatus(delhiveryData.status);
+        const hasStatusChange = mappedStatus && mappedStatus !== order.orderStatus;
+
+        if (hasStatusChange) {
+          order.orderStatus = mappedStatus;
+        }
+
+        if (hasNewScans || hasStatusChange || hasNormalizedHistory) {
+          await order.save();
+        }
+      } catch (err) {
+        console.error('Delhivery tracking fetch failed:', err.message);
+        delhiveryError = err.message;
+      }
+    }
+
+    res.json({
+      success: true,
+      tracking: {
+        orderId: order._id,
+        orderStatus: order.orderStatus,
+        awb: order.delhiveryAWB || null,
+        trackingHistory: order.trackingHistory || [],
+        delhiveryLive: delhiveryData
+          ? {
+              status: delhiveryData.status,
+              location: delhiveryData.location,
+              lastUpdated: new Date().toISOString(),
+            }
+          : null,
+        delhiveryError: delhiveryError,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -502,6 +686,7 @@ module.exports = {
   getOrder,
   packOrder,
   updateOrderStatus,
+  getTrackingInfo,
   razorpayWebhook,
   delhiveryWebhook,
   getDashboardStats,

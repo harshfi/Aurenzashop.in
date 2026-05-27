@@ -9,12 +9,14 @@ router.post('/', buyerAuth, orderController.createOrder);
 router.post('/verify-payment', buyerAuth, orderController.verifyPayment);
 router.get('/my-orders', buyerAuth, orderController.getMyOrders);
 router.get('/detail/:id', buyerAuth, orderController.getOrder);
+router.get('/:id/tracking', buyerAuth, orderController.getTrackingInfo);
 
 // Admin routes
 router.get('/admin/all', adminAuth, orderController.getAllOrders);
 router.get('/admin/stats', adminAuth, orderController.getDashboardStats);
 router.put('/admin/:id/pack', adminAuth, orderController.packOrder);
 router.put('/admin/:id/status', adminAuth, orderController.updateOrderStatus);
+router.get('/admin/:id/tracking', adminAuth, orderController.getTrackingInfo);
 
 // Webhooks (no auth — verified by signature)
 router.post('/webhooks/razorpay', orderController.razorpayWebhook);

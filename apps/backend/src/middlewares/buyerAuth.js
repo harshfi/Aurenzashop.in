@@ -101,6 +101,7 @@ const buyerAuth = async (req, res, next) => {
     }
 
     req.user = user;
+    req.isAdmin = false;
     next();
   } catch (error) {
     console.error('Buyer auth error:', error);

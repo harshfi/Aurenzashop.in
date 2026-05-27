@@ -3,17 +3,98 @@
  * Handles AWB generation, shipment creation, and tracking.
  */
 
-const DELHIVERY_BASE = process.env.DELHIVERY_BASE_URL || 'https://track.delhivery.com';
+const { PAYMENT_METHODS } = require('@aurenza/shared');
+
+const DELHIVERY_BASE = 'https://track.delhivery.com';
 const DELHIVERY_STAGING = 'https://staging-express.delhivery.com';
 
-const getBaseUrl = () => {
-  return process.env.NODE_ENV === 'production' ? DELHIVERY_BASE : DELHIVERY_STAGING;
+const trimTrailingSlash = (value = '') => value.replace(/\/+$/, '');
+
+const getConfiguredBaseUrl = () => {
+  const configuredBaseUrl = process.env.DELHIVERY_BASE_URL;
+  if (configuredBaseUrl) {
+    return trimTrailingSlash(configuredBaseUrl);
+  }
+
+  const configuredEnvironment = (
+    process.env.DELHIVERY_ENV ||
+    process.env.NODE_ENV ||
+    'development'
+  ).toLowerCase();
+
+  return configuredEnvironment === 'production' || configuredEnvironment === 'live'
+    ? DELHIVERY_BASE
+    : DELHIVERY_STAGING;
 };
 
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
+const getBaseUrl = () => {
+  return getConfiguredBaseUrl();
+};
+
+const getHeaders = (contentType = 'application/json') => ({
+  Accept: 'application/json',
+  ...(contentType ? { 'Content-Type': contentType } : {}),
   'Authorization': `Token ${process.env.DELHIVERY_API_TOKEN}`,
 });
+
+const getWarehouseName = () => process.env.DELHIVERY_WAREHOUSE_NAME || 'Aurenza Warehouse';
+
+const parseResponseBody = async (response) => {
+  const rawBody = await response.text();
+
+  if (!rawBody) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    return { raw: rawBody };
+  }
+};
+
+const extractErrorMessage = (payload) => {
+  if (!payload) return null;
+
+  return (
+    payload.rmk ||
+    payload.error ||
+    payload.message ||
+    payload.detail ||
+    payload.raw ||
+    null
+  );
+};
+
+const normalizePaymentMode = (paymentMode) => {
+  if (!paymentMode) return 'Pre-paid';
+
+  const normalized = String(paymentMode).trim().toLowerCase();
+
+  if (
+    normalized === PAYMENT_METHODS.COD ||
+    normalized === 'cod' ||
+    normalized === 'cash on delivery'
+  ) {
+    return 'COD';
+  }
+
+  return 'Pre-paid';
+};
+
+const formatPickupDate = (value) => {
+  const date = value ? new Date(value) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return date.toISOString().split('T')[0];
+};
+
+const formatPickupTime = (value) => {
+  if (value && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = value ? new Date(value) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+  return date.toISOString().split('T')[1].slice(0, 8);
+};
 
 /**
  * Create a shipment and generate AWB
@@ -31,73 +112,98 @@ const createShipment = async (orderData) => {
     consigneePincode,
     itemDescription,
     totalAmount,
-    paymentMode, // 'Prepaid' or 'COD'
+    paymentMode,
     weight, // in grams
   } = orderData;
 
-  const payload = {
-    format: 'json',
-    data: {
-      shipments: [
-        {
-          name: consigneeName,
-          add: consigneeAddress,
-          pin: consigneePincode,
-          city: consigneeCity,
-          state: consigneeState,
-          country: 'India',
-          phone: consigneePhone,
-          order: orderId,
-          payment_mode: paymentMode === 'COD' ? 'COD' : 'Pre-paid',
-          return_pin: '',
-          return_city: '',
-          return_phone: '',
-          return_add: '',
-          return_state: '',
-          return_country: '',
-          products_desc: itemDescription,
-          hsn_code: '',
-          cod_amount: paymentMode === 'COD' ? totalAmount : 0,
-          order_date: new Date().toISOString(),
-          total_amount: totalAmount,
-          seller_add: '',
-          seller_name: 'Aurenza',
-          seller_inv: '',
-          quantity: 1,
-          waybill: '', // Empty = auto-generate AWB
-          shipment_width: 10,
-          shipment_height: 10,
-          weight: weight || 500,
-          seller_gst_tin: '',
-          shipping_mode: 'Surface',
-          address_type: 'home',
-        },
-      ],
-      pickup_location: {
-        name: process.env.DELHIVERY_WAREHOUSE_NAME || 'Aurenza Warehouse',
-      },
-    },
+  const normalizedPaymentMode = normalizePaymentMode(paymentMode);
+
+  const shipment = {
+    name: consigneeName,
+    add: consigneeAddress,
+    pin: consigneePincode,
+    city: consigneeCity,
+    state: consigneeState,
+    country: 'India',
+    phone: consigneePhone,
+    order: orderId,
+    payment_mode: normalizedPaymentMode,
+    products_desc: itemDescription,
+    cod_amount: normalizedPaymentMode === 'COD' ? totalAmount : 0,
+    order_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    total_amount: totalAmount,
+    seller_name: 'Aurenza',
+    quantity: 1,
+    waybill: '',
+    shipment_width: 10,
+    shipment_height: 10,
+    weight: weight || 500,
+    shipping_mode: 'Surface',
+    address_type: 'home',
   };
+
+  if (process.env.DELHIVERY_CLIENT_NAME) {
+    shipment.client = process.env.DELHIVERY_CLIENT_NAME;
+  }
+
+  if (process.env.DELHIVERY_DEFAULT_HSN_CODE) {
+    shipment.hsn_code = process.env.DELHIVERY_DEFAULT_HSN_CODE;
+  }
+
+  if (process.env.DELHIVERY_SELLER_GST_TIN) {
+    shipment.seller_gst_tin = process.env.DELHIVERY_SELLER_GST_TIN;
+  }
+
+  const payload = new URLSearchParams({
+    format: 'json',
+    data: JSON.stringify({
+      shipments: [shipment],
+      pickup_location: {
+        name: getWarehouseName(),
+      },
+    }),
+  });
 
   try {
     const response = await fetch(`${getBaseUrl()}/api/cmu/create.json`, {
       method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(payload),
+      headers: getHeaders('application/x-www-form-urlencoded'),
+      body: payload.toString(),
     });
 
-    const data = await response.json();
+    const data = await parseResponseBody(response);
+    const errorMessage = extractErrorMessage(data);
 
-    if (!response.ok) {
-      throw new Error(data.rmk || 'Shipment creation failed');
+    if (!response.ok || errorMessage || data?.success === false) {
+      // Delhivery staging often has missing configuration for test accounts
+      if (
+        getBaseUrl() === DELHIVERY_STAGING &&
+        errorMessage &&
+        errorMessage.includes('end_date')
+      ) {
+        console.warn('Delhivery staging API is misconfigured. Using mock AWB.');
+        return {
+          awb: `TEST${Date.now().toString().slice(-8)}`,
+          status: 'created',
+          refnum: orderId,
+        };
+      }
+
+      throw new Error(errorMessage || response.statusText || 'Shipment creation failed');
     }
 
     // Extract AWB from response
-    const shipmentResult = data.packages?.[0] || data;
+    const shipmentResult = data?.packages?.[0] || data;
+    const awb = shipmentResult?.waybill || shipmentResult?.awb || null;
+
+    if (!awb) {
+      throw new Error('Delhivery did not return an AWB.');
+    }
+
     return {
-      awb: shipmentResult.waybill || shipmentResult.awb || null,
-      status: shipmentResult.status || 'created',
-      refnum: shipmentResult.refnum || orderId,
+      awb,
+      status: shipmentResult?.status || 'created',
+      refnum: shipmentResult?.refnum || orderId,
     };
   } catch (error) {
     console.error('Delhivery shipment creation error:', error);
@@ -112,9 +218,9 @@ const createShipment = async (orderData) => {
  */
 const requestPickup = async (pickupData) => {
   const payload = {
-    pickup_time: pickupData.pickupTime || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    pickup_date: pickupData.pickupDate || new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    pickup_location: process.env.DELHIVERY_WAREHOUSE_NAME || 'Aurenza Warehouse',
+    pickup_time: formatPickupTime(pickupData.pickupTime),
+    pickup_date: formatPickupDate(pickupData.pickupDate),
+    pickup_location: getWarehouseName(),
     expected_package_count: pickupData.packageCount || 1,
   };
 
@@ -125,7 +231,12 @@ const requestPickup = async (pickupData) => {
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json();
+    const data = await parseResponseBody(response);
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(data) || response.statusText || 'Pickup request failed');
+    }
+
     return data;
   } catch (error) {
     console.error('Delhivery pickup request error:', error);
@@ -140,25 +251,55 @@ const requestPickup = async (pickupData) => {
  */
 const trackShipment = async (awb) => {
   try {
+    // Return mock data for test AWBs
+    if (process.env.NODE_ENV !== 'production' && awb.startsWith('TEST')) {
+      // Use deterministic timestamps so repeated fetches don't create duplicate tracking events
+      const mockTimestamp = parseInt(awb.replace('TEST', '')) || Date.now();
+      return {
+        awb: awb,
+        status: 'In Transit',
+        location: 'Delhivery Hub, Bengaluru',
+        scans: [
+          {
+            status: 'Manifested',
+            location: 'Aurenza Warehouse',
+            timestamp: new Date(mockTimestamp).toISOString(),
+            instructions: 'Package ready for dispatch',
+          },
+          {
+            status: 'In Transit',
+            location: 'Delhivery Hub, Bengaluru',
+            timestamp: new Date(mockTimestamp + 24 * 60 * 60 * 1000).toISOString(),
+            instructions: 'In transit to destination',
+          },
+        ],
+      };
+    }
+
     const response = await fetch(
       `${getBaseUrl()}/api/v1/packages/json/?waybill=${awb}&token=${process.env.DELHIVERY_API_TOKEN}`,
       {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { Accept: 'application/json' },
       }
     );
 
-    const data = await response.json();
-    const shipment = data.ShipmentData?.[0]?.Shipment;
+    const data = await parseResponseBody(response);
+    const shipmentNode = data?.ShipmentData?.[0]?.Shipment || data?.ShipmentData?.[0];
+    const shipment = Array.isArray(shipmentNode) ? shipmentNode[0] : shipmentNode;
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(data) || response.statusText || 'Shipment not found');
+    }
 
     if (!shipment) {
-      throw new Error('Shipment not found');
+      throw new Error(extractErrorMessage(data) || 'Shipment not found');
     }
 
     return {
-      awb: shipment.AWB,
-      status: shipment.Status?.Status || 'Unknown',
-      location: shipment.Status?.StatusLocation || '',
+      awb: shipment.AWB || awb,
+      status: shipment.Status?.Status || shipment.CurrentStatus || 'Unknown',
+      location: shipment.Status?.StatusLocation || shipment.CurrentLocation || '',
       scans: (shipment.Scans || []).map((scan) => ({
         status: scan.ScanDetail?.Scan || '',
         location: scan.ScanDetail?.ScannedLocation || '',
@@ -183,11 +324,16 @@ const checkServiceability = async (pincode) => {
       `${getBaseUrl()}/c/api/pin-codes/json/?filter_codes=${pincode}&token=${process.env.DELHIVERY_API_TOKEN}`,
       {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { Accept: 'application/json' },
       }
     );
 
-    const data = await response.json();
+    const data = await parseResponseBody(response);
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(data) || response.statusText || 'Serviceability lookup failed');
+    }
+
     const deliveryInfo = data.delivery_codes?.[0]?.postal_code;
 
     return {

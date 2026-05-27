@@ -36,6 +36,7 @@ const adminAuth = async (req, res, next) => {
     }
 
     req.admin = admin;
+    req.isAdmin = true;
     next();
   } catch (error) {
     console.error('Admin auth error:', error);

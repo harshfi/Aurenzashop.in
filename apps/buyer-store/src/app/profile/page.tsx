@@ -4,7 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { signIn, signOut, useSession } from "next-auth/react";
-import { Clock3, LogOut, MapPin, Package, User } from "lucide-react";
+import {
+  Clock3,
+  LogOut,
+  MapPin,
+  Package,
+  User,
+  ChevronRight,
+} from "lucide-react";
 import { buildApiUrl } from "@/lib/api";
 
 interface BuyerAddress {
@@ -31,10 +38,12 @@ interface BuyerOrder {
   paymentStatus?: string | null;
   orderStatus?: string | null;
   createdAt?: string;
+  delhiveryAWB?: string | null;
   items?: Array<{
     productTitle?: string;
     quantity?: number;
     variantLabel?: string;
+    productImage?: string;
   }>;
 }
 
@@ -64,6 +73,28 @@ function formatStatusLabel(value?: string | null) {
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+function getStatusColor(status?: string | null) {
+  switch (status) {
+    case "placed":
+      return "bg-blue-100 text-blue-700";
+    case "confirmed":
+      return "bg-sky-100 text-sky-700";
+    case "processing":
+      return "bg-orange-100 text-orange-700";
+    case "packed":
+      return "bg-amber-100 text-amber-700";
+    case "shipped":
+    case "out_for_delivery":
+      return "bg-purple-100 text-purple-700";
+    case "delivered":
+      return "bg-emerald-100 text-emerald-700";
+    case "cancelled":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-600";
+  }
 }
 
 export default function ProfilePage() {
@@ -96,7 +127,7 @@ export default function ProfilePage() {
             signal: controller.signal,
             cache: "no-store",
           }),
-          fetch(buildApiUrl("/api/orders/my-orders?limit=6"), {
+          fetch(buildApiUrl("/api/orders/my-orders?limit=10"), {
             headers,
             signal: controller.signal,
             cache: "no-store",
@@ -233,10 +264,16 @@ export default function ProfilePage() {
           {orders.length > 0 ? (
             <div className="space-y-4">
               {orders.map((order) => (
-                <div key={order._id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <Link
+                  key={order._id}
+                  href={`/profile/orders/${order._id}`}
+                  className="group block rounded-2xl border border-gray-100 bg-white p-5 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-gray-900">Order #{order._id.slice(-6).toUpperCase()}</p>
+                      <p className="text-sm font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                        Order #{order._id.slice(-6).toUpperCase()}
+                      </p>
                       <p className="mt-1 text-sm text-gray-500">{formatOrderDate(order.createdAt)}</p>
                       <div className="mt-3 space-y-1 text-sm text-gray-600">
                         {(order.items ?? []).slice(0, 3).map((item, index) => (
@@ -247,19 +284,19 @@ export default function ProfilePage() {
                         ))}
                       </div>
                     </div>
-                    <div className="text-left sm:text-right">
-                      <p className="text-lg font-bold text-gray-900">
-                        ₹{(order.totalAmount ?? 0).toLocaleString()}
-                      </p>
-                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-                        {formatStatusLabel(order.orderStatus)}
-                      </p>
-                      <p className="mt-1 text-xs font-medium text-gray-500">
-                        Payment: {formatStatusLabel(order.paymentStatus)}
-                      </p>
+                    <div className="flex items-center justify-between sm:flex-col sm:items-end gap-3">
+                      <div className="text-left sm:text-right">
+                        <p className="text-lg font-bold text-gray-900">
+                          ₹{(order.totalAmount ?? 0).toLocaleString()}
+                        </p>
+                        <span className={`mt-2 inline-block text-xs font-semibold uppercase tracking-[0.15em] px-3 py-1 rounded-full ${getStatusColor(order.orderStatus)}`}>
+                          {formatStatusLabel(order.orderStatus)}
+                        </span>
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" />
                     </div>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           ) : (
